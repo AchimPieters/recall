@@ -1,0 +1,10 @@
+version: '3'
+
+services:
+
+  recall-server:
+    build: .
+    ports:
+      - "8000:8000"
+    volumes:
+      - ./media:/opt/recall/media

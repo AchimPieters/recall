@@ -1,0 +1,40 @@
+<h2>Drag Layout Editor</h2>
+
+<style>
+.zone{
+position:absolute;
+border:2px dashed red;
+cursor:move;
+}
+#canvas{
+width:800px;
+height:450px;
+border:1px solid black;
+position:relative;
+}
+</style>
+
+<div id="canvas">
+<div class="zone" style="left:0;top:0;width:400px;height:300px"></div>
+</div>
+
+<script>
+
+const zone=document.querySelector(".zone")
+let drag=false
+
+zone.onmousedown=()=>drag=true
+document.onmouseup=()=>drag=false
+
+document.onmousemove=e=>{
+
+if(drag){
+
+zone.style.left=e.pageX+"px"
+zone.style.top=e.pageY+"px"
+
+}
+
+}
+
+</script>

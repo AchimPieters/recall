@@ -1,0 +1,11 @@
+[Unit]
+Description=Recall Agent
+After=network.target
+
+[Service]
+ExecStart=/usr/bin/python3 /opt/recall/recall-player/agent.py
+Restart=always
+User=pi
+
+[Install]
+WantedBy=multi-user.target
