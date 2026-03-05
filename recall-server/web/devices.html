@@ -1,13 +1,11 @@
-<h2>Device Fleet</h2>
+<h2>Devices</h2>
 
-<div id="devices"></div>
+<pre id="devices"></pre>
 
 <script>
-
 fetch("/devices")
 .then(r=>r.json())
 .then(d=>{
 document.getElementById("devices").innerText=JSON.stringify(d,null,2)
 })
-
 </script>

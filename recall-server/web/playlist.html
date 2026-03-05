@@ -1,6 +1,6 @@
-<h2>Playlist Builder</h2>
+<h2>Playlist Editor</h2>
 
-<input id="file">
+<input id="file" placeholder="filename">
 <select id="type">
 <option value="video">video</option>
 <option value="image">image</option>
@@ -22,6 +22,8 @@ method:"POST",
 headers:{'Content-Type':'application/json'},
 body:JSON.stringify(item)
 })
+
+alert("Added")
 
 }
 

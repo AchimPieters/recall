@@ -1,6 +1,5 @@
 from fastapi import FastAPI, UploadFile
 from fastapi.staticfiles import StaticFiles
-from fastapi.websockets import WebSocket
 import os, shutil, json, psutil
 
 app = FastAPI()
@@ -8,21 +7,25 @@ app = FastAPI()
 MEDIA="/opt/recall/media"
 CONFIG="/opt/recall/config.json"
 
-devices={}
-playlist={"items":[]}
-
 os.makedirs(MEDIA,exist_ok=True)
 
+playlist={"items":[]}
+devices={}
+
 app.mount("/web", StaticFiles(directory="recall-server/web"), name="web")
+
+@app.get("/")
+def root():
+    return {"status":"recall running"}
 
 @app.get("/playlist")
 def get_playlist():
     return playlist
 
 @app.post("/playlist")
-def add(item:dict):
+def add_item(item:dict):
     playlist["items"].append(item)
-    return {"status":"ok"}
+    return {"status":"added"}
 
 @app.post("/media/upload")
 async def upload(file:UploadFile):
@@ -32,7 +35,7 @@ async def upload(file:UploadFile):
     return {"uploaded":file.filename}
 
 @app.get("/devices")
-def fleet():
+def device_list():
     return devices
 
 @app.post("/device/register")
@@ -40,19 +43,23 @@ def register(device:dict):
     devices[device["id"]]=device
     return {"status":"registered"}
 
-@app.post("/device/update")
-def remote_update():
-    return {"update":"triggered"}
-
 @app.get("/monitor")
 def monitor():
     return {
         "cpu":psutil.cpu_percent(),
-        "mem":psutil.virtual_memory().percent
+        "memory":psutil.virtual_memory().percent
     }
 
-@app.websocket("/preview")
-async def preview(ws:WebSocket):
-    await ws.accept()
-    while True:
-        await ws.send_text("preview-stream")
+@app.get("/settings")
+def get_settings():
+    try:
+        with open(CONFIG) as f:
+            return json.load(f)
+    except:
+        return {"rotation":0}
+
+@app.post("/settings")
+def save_settings(settings:dict):
+    with open(CONFIG,"w") as f:
+        json.dump(settings,f)
+    return {"status":"saved"}
