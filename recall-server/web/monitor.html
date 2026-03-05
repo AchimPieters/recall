@@ -1,18 +1,11 @@
 <h2>System Monitor</h2>
-
 <pre id="stats"></pre>
 
 <script>
-
 async function load(){
-
 let r=await fetch("/monitor")
 let j=await r.json()
-
 document.getElementById("stats").innerText=JSON.stringify(j,null,2)
-
 }
-
 setInterval(load,2000)
-
 </script>

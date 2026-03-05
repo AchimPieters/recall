@@ -1,4 +1,4 @@
-<h2>Playlist Editor</h2>
+<h2>Add Playlist Item</h2>
 
 <input id="file" placeholder="filename">
 <select id="type">
@@ -9,9 +9,7 @@
 <button onclick="add()">Add</button>
 
 <script>
-
 async function add(){
-
 let item={
 file:document.getElementById("file").value,
 type:document.getElementById("type").value
@@ -24,7 +22,5 @@ body:JSON.stringify(item)
 })
 
 alert("Added")
-
 }
-
 </script>

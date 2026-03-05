@@ -1,21 +1,13 @@
 # Recall
 
-Recall is an open‑source digital signage platform designed for Raspberry Pi.
+Digital signage system for Raspberry Pi.
 
-Features:
-- Web dashboard
-- Media upload
-- Playlist editor
-- Layout editor
-- Device monitoring
-- Screen rotation
-- Player agent
-- GStreamer renderer support
-- Docker support
+## Quick Install
 
-Quick install:
+On a fresh Raspberry Pi:
 
-git clone https://github.com/YOURNAME/recall
-cd recall
-chmod +x recall-install.sh
-./recall-install.sh
+bash <(curl -sL https://raw.githubusercontent.com/AchimPieters/recall/main/install.sh)
+
+After installation open:
+
+http://<raspberry-pi-ip>:8000/web
