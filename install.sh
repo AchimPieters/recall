@@ -1,22 +1,14 @@
+
 #!/usr/bin/env bash
 set -e
 
 REPO="https://github.com/AchimPieters/recall.git"
 INSTALL_DIR="/opt/recall"
 
-echo "==================================="
-echo " Recall Digital Signage Installer"
-echo "==================================="
-
-echo ""
-echo "Installing dependencies..."
+echo "Installing Recall..."
 
 sudo apt update
-
-sudo apt install -y git python3 python3-venv python3-pip mpv gstreamer1.0-tools gstreamer1.0-plugins-base gstreamer1.0-plugins-good gstreamer1.0-plugins-bad gstreamer1.0-libav
-
-echo ""
-echo "Installing Recall to $INSTALL_DIR"
+sudo apt install -y git python3 python3-venv python3-pip curl mpv gstreamer1.0-tools gstreamer1.0-plugins-base gstreamer1.0-plugins-good gstreamer1.0-plugins-bad gstreamer1.0-libav
 
 sudo rm -rf $INSTALL_DIR
 sudo git clone $REPO $INSTALL_DIR
@@ -24,25 +16,13 @@ sudo chown -R $USER:$USER $INSTALL_DIR
 
 cd $INSTALL_DIR
 
-echo ""
-echo "Creating Python virtual environment"
-
 python3 -m venv venv
 source venv/bin/activate
-
-echo ""
-echo "Installing Python dependencies"
 
 pip install --upgrade pip
 pip install fastapi uvicorn websockets psutil python-multipart requests
 
-echo ""
-echo "Creating media directory"
-
 mkdir -p media
-
-echo ""
-echo "Installing systemd services"
 
 sudo tee /etc/systemd/system/recall-server.service > /dev/null <<EOF
 [Unit]
@@ -83,10 +63,5 @@ sudo systemctl start recall-player
 IP=$(hostname -I | awk '{print $1}')
 
 echo ""
-echo "==================================="
-echo " Recall installed successfully"
-echo "==================================="
-echo ""
-echo "Open the dashboard:"
-echo "http://$IP:8000/web"
-echo ""
+echo "Recall installed!"
+echo "Open: http://$IP:8000/web"

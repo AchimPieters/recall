@@ -1,13 +1,10 @@
+
 # Recall
 
-Digital signage system for Raspberry Pi.
-
-## Quick Install
-
-On a fresh Raspberry Pi:
+Install on Raspberry Pi:
 
 bash <(curl -sL https://raw.githubusercontent.com/AchimPieters/recall/main/install.sh)
 
-After installation open:
+Open:
 
-http://<raspberry-pi-ip>:8000/web
+http://<raspberrypi-ip>:8000/web

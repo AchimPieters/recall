@@ -1,26 +1,18 @@
-<h2>Add Playlist Item</h2>
 
+<h2>Add Playlist Item</h2>
 <input id="file" placeholder="filename">
 <select id="type">
 <option value="video">video</option>
 <option value="image">image</option>
 </select>
-
 <button onclick="add()">Add</button>
-
 <script>
 async function add(){
 let item={
 file:document.getElementById("file").value,
 type:document.getElementById("type").value
 }
-
-await fetch("/playlist",{
-method:"POST",
-headers:{'Content-Type':'application/json'},
-body:JSON.stringify(item)
-})
-
+await fetch("/playlist",{method:"POST",headers:{'Content-Type':'application/json'},body:JSON.stringify(item)})
 alert("Added")
 }
 </script>

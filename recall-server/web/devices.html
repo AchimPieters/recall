@@ -1,10 +1,8 @@
+
 <h2>Devices</h2>
 <pre id="devices"></pre>
-
 <script>
-fetch("/devices")
-.then(r=>r.json())
-.then(d=>{
+fetch("/devices").then(r=>r.json()).then(d=>{
 document.getElementById("devices").innerText=JSON.stringify(d,null,2)
 })
 </script>
