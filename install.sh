@@ -2,13 +2,35 @@
 #!/usr/bin/env bash
 set -e
 
-REPO="https://github.com/AchimPieters/recall.git"
 INSTALL_DIR="/opt/recall"
+REPO="https://github.com/AchimPieters/recall.git"
 
-echo "Installing Recall..."
+echo "================================="
+echo " Installing Recall v1"
+echo "================================="
 
 sudo apt update
-sudo apt install -y git python3 python3-venv python3-pip curl mpv chromium-browser gstreamer1.0-tools gstreamer1.0-plugins-base gstreamer1.0-plugins-good gstreamer1.0-plugins-bad gstreamer1.0-libav
+
+# detect chromium package
+if apt-cache show chromium >/dev/null 2>&1; then
+    BROWSER="chromium"
+else
+    BROWSER="chromium-browser"
+fi
+
+echo "Using browser package: $BROWSER"
+
+sudo apt install -y \
+git curl \
+python3 python3-venv python3-pip \
+mpv $BROWSER \
+gstreamer1.0-tools \
+gstreamer1.0-plugins-base \
+gstreamer1.0-plugins-good \
+gstreamer1.0-plugins-bad \
+gstreamer1.0-libav
+
+echo "Installing Recall into $INSTALL_DIR"
 
 sudo rm -rf $INSTALL_DIR
 sudo git clone $REPO $INSTALL_DIR
@@ -20,9 +42,11 @@ python3 -m venv venv
 source venv/bin/activate
 
 pip install --upgrade pip
-pip install fastapi uvicorn websockets psutil python-multipart requests
+pip install fastapi uvicorn psutil requests python-multipart
 
 mkdir -p media
+
+echo "Creating systemd services..."
 
 sudo tee /etc/systemd/system/recall-server.service > /dev/null <<EOF
 [Unit]
@@ -56,13 +80,13 @@ EOF
 
 sudo tee /etc/systemd/system/recall-kiosk.service > /dev/null <<EOF
 [Unit]
-Description=Recall Chromium Kiosk
+Description=Recall Kiosk Browser
 After=graphical.target
 
 [Service]
 User=$USER
 Environment=DISPLAY=:0
-ExecStart=/usr/bin/chromium-browser --kiosk http://localhost:8000/web
+ExecStart=/usr/bin/$BROWSER --kiosk http://localhost:8000/web --noerrdialogs --disable-infobars
 Restart=always
 
 [Install]
@@ -70,9 +94,9 @@ WantedBy=graphical.target
 EOF
 
 sudo systemctl daemon-reload
+
 sudo systemctl enable recall-server
 sudo systemctl enable recall-player
-sudo systemctl enable recall-kiosk
 
 sudo systemctl start recall-server
 sudo systemctl start recall-player
@@ -80,8 +104,12 @@ sudo systemctl start recall-player
 IP=$(hostname -I | awk '{print $1}')
 
 echo ""
-echo "Recall installed!"
-echo "Dashboard: http://$IP:8000/web"
+echo "================================="
+echo " Recall installed successfully"
+echo "================================="
+echo ""
+echo "Dashboard:"
+echo "http://$IP:8000/web"
 echo ""
 echo "Update later with:"
 echo "sudo /opt/recall/update.sh"

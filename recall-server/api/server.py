@@ -12,7 +12,6 @@ MEDIA_DIR.mkdir(exist_ok=True)
 
 app = FastAPI()
 
-playlist = {"items": []}
 devices = {}
 
 app.mount("/web", StaticFiles(directory=str(WEB_DIR)), name="web")
@@ -21,14 +20,14 @@ app.mount("/web", StaticFiles(directory=str(WEB_DIR)), name="web")
 def root():
     return {"status":"recall running"}
 
-@app.get("/devices")
-def list_devices():
-    return devices
-
 @app.post("/device/register")
 def register(device:dict):
     devices[device["id"]] = device
     return {"status":"registered"}
+
+@app.get("/devices")
+def list_devices():
+    return devices
 
 @app.get("/monitor")
 def monitor():

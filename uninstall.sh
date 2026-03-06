@@ -1,8 +1,5 @@
 
 #!/usr/bin/env bash
-set -e
-
-INSTALL_DIR="/opt/recall"
 
 echo "Removing Recall..."
 
@@ -20,6 +17,6 @@ sudo rm -f /etc/systemd/system/recall-kiosk.service
 
 sudo systemctl daemon-reload
 
-sudo rm -rf $INSTALL_DIR
+sudo rm -rf /opt/recall
 
 echo "Recall removed."
