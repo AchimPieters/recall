@@ -6,12 +6,12 @@ INSTALL_DIR="/opt/recall"
 REPO="https://github.com/AchimPieters/recall.git"
 
 echo "================================="
-echo " Installing Recall v1"
+echo " Recall v1 Production Installer"
 echo "================================="
 
 sudo apt update
 
-# detect chromium package
+# Detect correct Chromium package
 if apt-cache show chromium >/dev/null 2>&1; then
     BROWSER="chromium"
 else
@@ -20,17 +20,9 @@ fi
 
 echo "Using browser package: $BROWSER"
 
-sudo apt install -y \
-git curl \
-python3 python3-venv python3-pip \
-mpv $BROWSER \
-gstreamer1.0-tools \
-gstreamer1.0-plugins-base \
-gstreamer1.0-plugins-good \
-gstreamer1.0-plugins-bad \
-gstreamer1.0-libav
+sudo apt install -y git curl python3 python3-venv python3-pip mpv $BROWSER gstreamer1.0-tools gstreamer1.0-plugins-base gstreamer1.0-plugins-good gstreamer1.0-plugins-bad gstreamer1.0-libav
 
-echo "Installing Recall into $INSTALL_DIR"
+echo "Installing Recall to $INSTALL_DIR"
 
 sudo rm -rf $INSTALL_DIR
 sudo git clone $REPO $INSTALL_DIR
@@ -80,13 +72,13 @@ EOF
 
 sudo tee /etc/systemd/system/recall-kiosk.service > /dev/null <<EOF
 [Unit]
-Description=Recall Kiosk Browser
+Description=Recall Chromium Kiosk
 After=graphical.target
 
 [Service]
 User=$USER
 Environment=DISPLAY=:0
-ExecStart=/usr/bin/$BROWSER --kiosk http://localhost:8000/web --noerrdialogs --disable-infobars
+ExecStart=/usr/bin/$BROWSER --kiosk http://localhost:8000/web --noerrdialogs --disable-infobars --disable-session-crashed-bubble
 Restart=always
 
 [Install]
@@ -97,6 +89,7 @@ sudo systemctl daemon-reload
 
 sudo systemctl enable recall-server
 sudo systemctl enable recall-player
+sudo systemctl enable recall-kiosk
 
 sudo systemctl start recall-server
 sudo systemctl start recall-player

@@ -11,7 +11,6 @@ MEDIA_DIR = BASE_DIR.parent / "media"
 MEDIA_DIR.mkdir(exist_ok=True)
 
 app = FastAPI()
-
 devices = {}
 
 app.mount("/web", StaticFiles(directory=str(WEB_DIR)), name="web")

@@ -1,5 +1,5 @@
 
-Recall v1
+Recall v1 Production
 
 Install:
 bash <(curl -sL https://raw.githubusercontent.com/AchimPieters/recall/main/install.sh)
