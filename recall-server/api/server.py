@@ -13,7 +13,7 @@ MEDIA_DIR.mkdir(exist_ok=True)
 app = FastAPI()
 devices = {}
 
-app.mount("/web", StaticFiles(directory=str(WEB_DIR)), name="web")
+app.mount("/web", StaticFiles(directory=str(WEB_DIR), html=True), name="web")
 
 @app.get("/")
 def root():
