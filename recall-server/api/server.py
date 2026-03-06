@@ -21,30 +21,14 @@ app.mount("/web", StaticFiles(directory=str(WEB_DIR)), name="web")
 def root():
     return {"status":"recall running"}
 
-@app.get("/playlist")
-def get_playlist():
-    return playlist
-
-@app.post("/playlist")
-def add(item:dict):
-    playlist["items"].append(item)
-    return {"status":"added"}
-
-@app.post("/media/upload")
-async def upload(file: UploadFile):
-    path = MEDIA_DIR / file.filename
-    with open(path,"wb") as f:
-        shutil.copyfileobj(file.file,f)
-    return {"uploaded": file.filename}
+@app.get("/devices")
+def list_devices():
+    return devices
 
 @app.post("/device/register")
 def register(device:dict):
     devices[device["id"]] = device
     return {"status":"registered"}
-
-@app.get("/devices")
-def list_devices():
-    return devices
 
 @app.get("/monitor")
 def monitor():
@@ -52,3 +36,10 @@ def monitor():
         "cpu": psutil.cpu_percent(),
         "memory": psutil.virtual_memory().percent
     }
+
+@app.post("/media/upload")
+async def upload(file: UploadFile):
+    path = MEDIA_DIR / file.filename
+    with open(path,"wb") as f:
+        shutil.copyfileobj(file.file,f)
+    return {"uploaded": file.filename}

@@ -1,10 +1,18 @@
 
-# Recall
+# Recall Signage
 
-Install on Raspberry Pi:
+Install:
 
 bash <(curl -sL https://raw.githubusercontent.com/AchimPieters/recall/main/install.sh)
 
-Open:
+Open dashboard:
 
-http://<raspberrypi-ip>:8000/web
+http://<pi-ip>:8000/web
+
+Update:
+
+sudo /opt/recall/update.sh
+
+Uninstall:
+
+sudo /opt/recall/uninstall.sh

@@ -1,8 +1,11 @@
 
-<h2>Devices</h2>
+<h2>Connected Devices</h2>
 <pre id="devices"></pre>
 <script>
-fetch("/devices").then(r=>r.json()).then(d=>{
-document.getElementById("devices").innerText=JSON.stringify(d,null,2)
-})
+async function load(){
+let r=await fetch("/devices")
+let j=await r.json()
+document.getElementById("devices").innerText=JSON.stringify(j,null,2)
+}
+setInterval(load,2000)
 </script>

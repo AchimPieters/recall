@@ -8,7 +8,7 @@ INSTALL_DIR="/opt/recall"
 echo "Installing Recall..."
 
 sudo apt update
-sudo apt install -y git python3 python3-venv python3-pip curl mpv gstreamer1.0-tools gstreamer1.0-plugins-base gstreamer1.0-plugins-good gstreamer1.0-plugins-bad gstreamer1.0-libav
+sudo apt install -y git python3 python3-venv python3-pip curl mpv chromium-browser gstreamer1.0-tools gstreamer1.0-plugins-base gstreamer1.0-plugins-good gstreamer1.0-plugins-bad gstreamer1.0-libav
 
 sudo rm -rf $INSTALL_DIR
 sudo git clone $REPO $INSTALL_DIR
@@ -54,9 +54,26 @@ Restart=always
 WantedBy=multi-user.target
 EOF
 
+sudo tee /etc/systemd/system/recall-kiosk.service > /dev/null <<EOF
+[Unit]
+Description=Recall Chromium Kiosk
+After=graphical.target
+
+[Service]
+User=$USER
+Environment=DISPLAY=:0
+ExecStart=/usr/bin/chromium-browser --kiosk http://localhost:8000/web
+Restart=always
+
+[Install]
+WantedBy=graphical.target
+EOF
+
 sudo systemctl daemon-reload
 sudo systemctl enable recall-server
 sudo systemctl enable recall-player
+sudo systemctl enable recall-kiosk
+
 sudo systemctl start recall-server
 sudo systemctl start recall-player
 
@@ -64,4 +81,8 @@ IP=$(hostname -I | awk '{print $1}')
 
 echo ""
 echo "Recall installed!"
-echo "Open: http://$IP:8000/web"
+echo "Dashboard: http://$IP:8000/web"
+echo ""
+echo "Update later with:"
+echo "sudo /opt/recall/update.sh"
+echo ""
