@@ -60,3 +60,11 @@ CREATE TABLE IF NOT EXISTS device_logs (
   message VARCHAR(4096) NOT NULL,
   timestamp TIMESTAMP NOT NULL DEFAULT NOW()
 );
+
+CREATE TABLE IF NOT EXISTS playlist_items (
+  id SERIAL PRIMARY KEY,
+  playlist_id INTEGER NOT NULL,
+  media_id INTEGER NOT NULL,
+  position INTEGER NOT NULL DEFAULT 0,
+  duration_seconds INTEGER NULL
+);
