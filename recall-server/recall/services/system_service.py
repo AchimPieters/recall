@@ -16,9 +16,12 @@ class SystemService:
         if not confirmed:
             return {"ok": False, "reason": "confirmation_required"}
         self._audit("reboot", f"requested_by={actor}")
-        proc = subprocess.run(
-            ["systemctl", "reboot"], capture_output=True, text=True
-        )  # nosec B603,B607
+        try:
+            proc = subprocess.run(
+                ["systemctl", "reboot"], capture_output=True, text=True, timeout=15
+            )  # nosec B603,B607
+        except subprocess.TimeoutExpired:
+            return {"ok": False, "stdout": "", "stderr": "reboot command timed out"}
         return {
             "ok": proc.returncode == 0,
             "stdout": proc.stdout.strip(),
@@ -29,9 +32,15 @@ class SystemService:
         if not confirmed:
             return {"ok": False, "reason": "confirmation_required"}
         self._audit("update", f"requested_by={actor}")
-        proc = subprocess.run(
-            ["bash", "/opt/recall/update.sh"], capture_output=True, text=True
-        )  # nosec B603,B607
+        try:
+            proc = subprocess.run(
+                ["bash", "/opt/recall/update.sh"],
+                capture_output=True,
+                text=True,
+                timeout=300,
+            )  # nosec B603,B607
+        except subprocess.TimeoutExpired:
+            return {"ok": False, "stdout": "", "stderr": "update command timed out"}
         return {
             "ok": proc.returncode == 0,
             "stdout": proc.stdout.strip(),

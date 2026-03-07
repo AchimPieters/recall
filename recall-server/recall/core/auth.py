@@ -38,7 +38,9 @@ def get_current_user(
     user = db.query(User).filter(User.username == username).first()
     if not user:
         raise credentials_exception
-    return AuthUser(username=user.username, role=role)
+    # Always use the role from the database to avoid stale or tampered claim drift.
+    # The token role is ignored for authorization decisions.
+    return AuthUser(username=user.username, role=user.role)
 
 
 def require_role(*roles: str):

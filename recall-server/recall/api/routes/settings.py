@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 from recall.core.auth import AuthUser, get_current_user, require_role
 from recall.db.database import get_db
@@ -15,7 +15,10 @@ def get_settings(db: Session = Depends(get_db)):
 
 @router.post("", dependencies=[Depends(require_role("admin", "operator"))])
 def set_settings(payload: dict, db: Session = Depends(get_db)):
-    return SettingsService(db).set_many(payload)
+    try:
+        return SettingsService(db).set_many(payload)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
 
 
 @router.post("/apply", dependencies=[Depends(require_role("admin", "operator"))])
@@ -25,7 +28,10 @@ def apply_settings(
     db: Session = Depends(get_db),
     user: AuthUser = Depends(get_current_user),
 ):
-    data = SettingsService(db).set_many(payload)
+    try:
+        data = SettingsService(db).set_many(payload)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
     SystemService(db)._audit(
         "settings_apply", f"confirmed={confirmed},requested_by={user.username}"
     )
