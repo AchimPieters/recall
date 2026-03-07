@@ -52,4 +52,6 @@ def get_settings() -> Settings:
             settings.jwt_secret = "dev-insecure-secret-change-me"
         else:
             raise ValueError("JWT_SECRET must be set outside development")
+    if settings.environment != "dev" and settings.clamav_fail_open:
+        raise ValueError("RECALL_CLAMAV_FAIL_OPEN must be false outside development")
     return settings

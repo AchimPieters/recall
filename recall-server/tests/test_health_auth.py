@@ -1,7 +1,7 @@
 from fastapi.testclient import TestClient
 
 from recall.api.main import app
-from recall.core.security import get_password_hash
+from recall.core.security import create_access_token, get_password_hash
 from recall.db.database import Base, SessionLocal, engine
 from recall.models.settings import User
 
@@ -28,7 +28,11 @@ def _ensure_admin() -> None:
 
 
 def test_health_and_ready_endpoints() -> None:
-    assert client.get("/health").status_code == 200
+    response = client.get("/health")
+    assert response.status_code == 200
+    assert response.headers["x-content-type-options"] == "nosniff"
+    assert response.headers["x-frame-options"] == "DENY"
+    assert response.headers["referrer-policy"] == "no-referrer"
     assert client.get("/ready").status_code == 200
 
 
@@ -44,3 +48,28 @@ def test_login_rate_limit_and_auth() -> None:
 
     devices = client.get("/device/list", headers={"Authorization": f"Bearer {token}"})
     assert devices.status_code == 200
+
+
+def test_role_is_loaded_from_database_not_token_claim() -> None:
+    _ensure_admin()
+    token = create_access_token(subject="admin", role="viewer")
+
+    # Should still be authorized as admin because role is read from DB, not claim.
+    response = client.post(
+        "/system/reboot?confirmed=false",
+        headers={"Authorization": f"Bearer {token}"},
+    )
+    assert response.status_code == 200
+    assert response.json()["reason"] == "confirmation_required"
+
+
+def test_settings_reject_unknown_keys() -> None:
+    _ensure_admin()
+    token = create_access_token(subject="admin", role="admin")
+    response = client.post(
+        "/settings",
+        headers={"Authorization": f"Bearer {token}"},
+        json={"unknown_key": "value"},
+    )
+    assert response.status_code == 400
+    assert "Unsupported setting keys" in response.json()["detail"]
