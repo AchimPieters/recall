@@ -1,245 +1,157 @@
-# Recall Ultra-Deep Code Audit
+# Recall Ultra-Deep Code Audit (Current State)
 
-Date: 2026-03-07
+Date: 2026-03-07  
 Scope: Entire repository (`/workspace/recall`)
 
-## Methodology
+## Requested benchmark
 
-1. Manual review of Python services, shell installers, container assets, and front-end pages.
-2. Static sanity checks:
-   - `python3 -m compileall -q recall-server recall-player tools`
+Target asked: verify if the codebase is at:
+
+- Architectuur: **10/10**
+- Security: **10/10**
+- Operations: **10/10**
+- Maintainability: **10/10**
+- Productvolwassenheid: **10/10**
+
+## Verdict (short)
+
+**No** — the repository is not at 10/10 in any of those dimensions yet.
+
+## Method used
+
+1. Manual review of API, services, models, scripts, docs, and web UI.
+2. Automated checks:
+   - `python3 -m pytest -q recall-server/tests`
    - `bandit -q -r recall-server recall-player tools -f txt`
-   - `shellcheck install.sh uninstall.sh update.sh recall-install.sh`
-3. Targeted pattern hunt for high-risk anti-patterns (`except:`, unbounded upload flows, debug binds, host-wide service exposure).
+   - `python3 -m compileall -q recall-server recall-player tools`
+   - `shellcheck install.sh uninstall.sh update.sh recall-install.sh install-docker.sh install-pi.sh install-x86.sh`
 
 ---
 
-## Executive Summary
+## Scorecard
 
-The project is functionally compact and easy to reason about, but the default deployment posture is **not production-safe**. The largest risk cluster is around **unauthenticated control/data endpoints** and **unsafe file upload handling**. In addition, installer/runtime scripts use practices that reduce operational reliability and hardening (unquoted vars, broad privileged operations, running services on all interfaces by default).
-
-### Overall risk rating
-
-- **Security:** High
-- **Reliability:** Medium
-- **Operational maturity:** Low-to-Medium
-
----
-
-## Findings (Prioritized)
-
-## 1) Unauthenticated API surface allows arbitrary writes and device spoofing
-**Severity:** Critical
-
-### Evidence
-- FastAPI server exposes `/device/register`, `/devices`, `/monitor`, and `/media/upload` without authn/authz.  
-- Device registration writes directly into global state keyed only by caller-controlled `id`.
-
-### Impact
-Any host that can reach the service can:
-- Overwrite or impersonate device identities.
-- Upload arbitrary files into the media directory.
-- Harvest host telemetry (`/monitor`) and fleet metadata (`/devices`).
-
-### Recommendation
-- Require API key or mTLS at minimum for all non-root routes.
-- Add per-endpoint authorization checks.
-- Restrict service bind or enforce reverse-proxy auth if LAN-wide exposure is required.
+| Category | Score (/10) | Why not 10/10 |
+|---|---:|---|
+| Architectuur | **7.5** | Clear layering in server package, but mixed legacy/runtime paths and split server modes (FastAPI + Flask dev server) create drift and ambiguity. |
+| Security | **6.5** | Good role-based JWT and upload checks exist, but insecure defaults and trust-boundary gaps remain (default JWT secret, permissive CORS, bootstrap admin creds). |
+| Operations | **6.0** | Health/readiness/metrics and Docker/systemd exist, but deployment consistency, secret handling, backup/migration workflow, and production runbooks are incomplete. |
+| Maintainability | **7.0** | Modular package and tests exist, but test depth is shallow, dependency pinning absent, and deprecated APIs/warnings are unresolved. |
+| Productvolwassenheid | **6.0** | Core features work, but maturity signals (SLOs, observability strategy, release governance, hardening baselines) are still early-stage. |
 
 ---
 
-## 2) File upload path traversal via unsanitized filename
-**Severity:** Critical
+## Category deep dive
 
-### Evidence
-- `path = MEDIA_DIR / file.filename` in FastAPI API.
-- `path = os.path.join(MEDIA_DIR, file.filename)` in Flask dev server.
+## 1) Architectuur — 7.5/10
 
-### Impact
-Attackers can attempt `../../` traversal payloads in multipart filenames and write outside intended media storage (behavior depends on server/framework handling and filesystem permissions). Even partial traversal or overwrite inside media can still be destructive.
+### What is good
+- Layer separation is explicit and mostly respected (`api/routes` → `services` → `models`/`db`).
+- Config/auth/security concerns are centralized under `recall/core`.
+- Docs describe intended layered architecture.
 
-### Recommendation
-- Normalize with `Path(file.filename).name` (or Werkzeug `secure_filename`) and validate against allowlist.
-- Resolve and verify target path remains within `MEDIA_DIR` before writing.
-- Generate server-side UUID filenames; store original name only as metadata.
+### Why this is not 10/10
+1. **Dual server patterns** remain in repo (production FastAPI app and separate Flask dev server), increasing cognitive load and risk of behavior drift.
+2. **Schema ownership is mixed**: DB bootstrapping uses `Base.metadata.create_all(...)` while SQL migration SQL also exists, which can diverge over time.
+3. **Domain boundaries are thin** in places (direct dict payloads in settings and device routes) with limited typed contracts for full API surface.
 
----
-
-## 3) Upload endpoint lacks file-size and file-type limits (DoS/storage abuse)
-**Severity:** High
-
-### Evidence
-- No max content length or stream limits in FastAPI or Flask upload flows.
-- No MIME/type validation before save.
-
-### Impact
-Potential disk exhaustion, oversized payload memory pressure, and long-request resource starvation.
-
-### Recommendation
-- Enforce request size limits at app and reverse-proxy layers.
-- Validate MIME and extension allowlist.
-- Add quota controls and cleanup/retention policy.
+### Architectural risk
+- Medium: maintainers can unintentionally change one runtime path while assumptions in docs/scripts still point to another path.
 
 ---
 
-## 4) Dev server shipped with `debug=True` and `0.0.0.0` bind
-**Severity:** High (dev-time), Medium (if accidentally exposed)
+## 2) Security — 6.5/10
 
-### Evidence
-- `app.run(host="0.0.0.0", port=8080, debug=True)`.
+### What is good
+- JWT-based auth and role gates are in place on protected routes.
+- Login endpoint has rate limiting.
+- Upload flow validates size/MIME and uses generated UUID filenames.
+- Optional ClamAV streaming scan hook exists.
 
-### Impact
-If reachable from untrusted network, Werkzeug debugger can expose powerful introspection and (in some configurations) code execution primitives.
+### Gaps blocking 10/10
+1. **Unsafe default secret** (`JWT_SECRET` defaults to `change-me`) makes accidental weak deployments possible.
+2. **Bootstrap admin account** is created with `admin/admin` on startup if missing.
+3. **CORS wildcard** (`allow_origins=["*"]`, allow all methods/headers) is too permissive for production.
+4. **Malware scan fail-open behavior** currently returns success when ClamAV is unreachable.
+5. **No explicit transport hardening** (TLS termination assumptions not enforced in app-level config/docs).
 
-### Recommendation
-- Default to `debug=False`.
-- Bind to `127.0.0.1` for local tooling.
-- Gate debug mode via explicit env var.
-
----
-
-## 5) Broad `except:` blocks suppress operational failure signals
-**Severity:** Medium
-
-### Evidence
-- `except:` in `get_cpu_temp`, `/monitor` fallback, and player registration loop.
-
-### Impact
-Real defects (permission errors, runtime regressions, API drift) are silently hidden, reducing observability and delaying incident response.
-
-### Recommendation
-- Catch specific exceptions (`FileNotFoundError`, `requests.RequestException`, etc.).
-- Emit structured logs with cause/context.
-- Preserve mock mode but include explicit fault markers.
+### Security risk
+- Medium-to-high for default installs; significantly lower only after operator hardening.
 
 ---
 
-## 6) Agent registration HTTP call has no timeout/backoff strategy
-**Severity:** Medium
+## 3) Operations — 6.0/10
 
-### Evidence
-- `requests.post(...)` called without timeout in an infinite loop.
+### What is good
+- `/health`, `/ready`, and Prometheus `/metrics` endpoints exist.
+- Structured request logging via `structlog` is enabled.
+- Container and systemd assets are present.
 
-### Impact
-Potential thread hangs on network pathologies; noisy retry profile during outages; avoidable resource churn.
+### Gaps blocking 10/10
+1. **Production configuration discipline** is weak (un-pinned requirements, placeholder secrets in compose).
+2. **Migration operations** are under-defined: migration SQL exists but no clear, enforced migration execution lifecycle in deploy docs.
+3. **Runbooks/incident guidance** are minimal (no defined backup/restore, rollback, alerting thresholds).
+4. **Service topology docs** mention planned components that are not actually implemented, which can confuse operations.
 
-### Recommendation
-- Add connect/read timeout.
-- Implement bounded exponential backoff with jitter.
-- Distinguish transient vs permanent failures.
-
----
-
-## 7) In-memory global `devices` state has concurrency and durability limitations
-**Severity:** Medium
-
-### Evidence
-- Mutable process-global dict used as source of truth in both API servers.
-
-### Impact
-- Lost state on restart.
-- Race conditions under multi-worker deployments.
-- No TTL/offline semantics except overwrites.
-
-### Recommendation
-- Move to persistent store (SQLite/Redis/Postgres).
-- Add heartbeat timestamp and expiration logic.
-- Add schema validation (Pydantic model) for registration payloads.
+### Operational risk
+- Medium: likely fine for small/internal deployments, but underpowered for strict production reliability expectations.
 
 ---
 
-## 8) Install/update scripts contain portability and safety gaps
-**Severity:** Medium
+## 4) Maintainability — 7.0/10
 
-### Evidence
-- Unquoted variable expansions in privileged commands.
-- Shebang not first line in multiple scripts.
-- Runtime dependence on mutable latest packages without pinning.
+### What is good
+- Codebase is relatively compact and readable.
+- Service-level separation reduces route complexity.
+- Basic tests exist and pass.
+- Shell scripts pass shellcheck in current state.
 
-### Impact
-Potential word-splitting bugs, inconsistent installs across environments, fragile automation behavior.
+### Gaps blocking 10/10
+1. **Test coverage depth** is limited (few integration/negative/security tests).
+2. **Deprecation warnings** surfaced in tests (`on_event`, `datetime.utcnow`) remain unresolved.
+3. **Dependency pinning** absent in requirements (predictability/reproducibility issue).
+4. **Documentation granularity** is high-level and not enough for advanced contributor onboarding.
 
-### Recommendation
-- Quote all variable expansions.
-- Ensure shebang first line.
-- Pin minimal dependency ranges and record a lock/constraints file.
-
----
-
-## 9) Docker assets appear inconsistent with project layout
-**Severity:** Medium
-
-### Evidence
-- Container command runs `uvicorn server:app` from `/app`, while `server.py` lives under `recall-server/api/`.
-- Compose file under `docker/` uses `build: .` and host `./media` volume relative to compose location, which may not align with intended repo root usage.
-
-### Impact
-Potential non-working container startup and confusing operator experience.
-
-### Recommendation
-- Set `WORKDIR /app/recall-server/api` or command `uvicorn recall-server.api.server:app` with valid module path.
-- Reconcile compose paths and document canonical launch command.
+### Maintainability risk
+- Medium-low currently; grows as scope grows unless coverage and standards are tightened.
 
 ---
 
-## 10) Front-end correctness issues indicate low test coverage
-**Severity:** Low
+## 5) Productvolwassenheid — 6.0/10
 
-### Evidence
-- `devices.html` script writes to `#devices`, but no such element exists.
-- `monitor.html` duplicates chart/info updates and contains inconsistent temp rendering branches.
-- Navigation links include `settings.html`, file absent.
-- README says dev server opens at `:5000`, script announces/runs `:8080`.
+### What is good
+- Core product loop exists (device registration/heartbeat, media upload, monitoring, settings/system actions).
+- Multiple deployment entry points are provided (scripts, Docker, systemd).
 
-### Impact
-Broken UX, confusion, and avoidable troubleshooting overhead.
+### Gaps blocking 10/10
+1. **Governance artifacts** are minimal (no strong release policy, versioning guarantees, quality gates in repo).
+2. **Operational excellence criteria** (SLO/SLI, alerting model, support boundaries) are not defined.
+3. **Security maturity process** is not fully documented (hardening baseline, secret rotation, threat model cadence).
+4. **Product consistency** between docs/planned components and implemented features is incomplete.
 
-### Recommendation
-- Add minimal UI smoke tests (Playwright).
-- Add CI checks for broken internal links and JS runtime errors.
-- Align documentation with runtime defaults.
+### Product maturity risk
+- Medium: suitable for evolving internal/early production use, not yet enterprise-grade 10/10 maturity.
 
 ---
 
-## Static Analysis Output Summary
+## Key evidence summary from automated checks
 
-### Bandit
-- High: 1
-- Medium: 2
-- Low: 8
-- Key hits: Flask debug mode, request without timeout, broad exception suppressions.
-
-### ShellCheck
-- Errors and infos detected in install/update/uninstall scripts.
-- Most important: shebang placement and quoting safety.
+- `pytest`: passed (`2 passed`), but warnings indicate technical debt (deprecated FastAPI startup event usage and UTC naive datetime patterns).
+- `bandit`: no medium/high issues, but several low-severity issues including hardcoded-password-pattern detections and subprocess call scrutiny.
+- `compileall`: clean.
+- `shellcheck`: clean for reviewed scripts.
 
 ---
 
-## 30/60/90 Day Remediation Plan
+## Final answer to your question
 
-### 0–30 days (must do)
-1. Add authentication for all mutating and telemetry endpoints.
-2. Fix upload sanitization and hard path boundary checks.
-3. Add request size limits and upload allowlist.
-4. Disable debug mode and localize dev bind defaults.
+If your bar is truly **10/10 across architecture, security, operations, maintainability, and product maturity**, this codebase is **not there yet**.
 
-### 31–60 days
-1. Replace global dict state with persistent store + schema validation.
-2. Add structured logging and exception taxonomy.
-3. Harden install scripts (quoting, pinning, idempotency).
+It is in a **solid improving state**, but currently sits around:
 
-### 61–90 days
-1. CI pipeline: lint, static security checks, smoke tests.
-2. Container hardening and verified compose workflow.
-3. Threat model + security baseline document.
+- Architectuur: **7.5/10**
+- Security: **6.5/10**
+- Operations: **6.0/10**
+- Maintainability: **7.0/10**
+- Productvolwassenheid: **6.0/10**
 
----
-
-## Suggested Acceptance Criteria
-
-- Unauthenticated requests to `/device/register` and `/media/upload` return 401/403.
-- Upload attempts with traversal filenames are rejected with 400.
-- Oversized uploads rejected deterministically.
-- Dev server defaults: `debug=False`, bind `127.0.0.1`.
-- Player agent registration uses explicit timeout and bounded backoff.
-- CI runs compile/lint/security checks on each PR.
+(As requested, this audit does not perform broad remediation.)

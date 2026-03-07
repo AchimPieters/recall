@@ -9,8 +9,9 @@ services:
       - "8000:8000"
     environment:
       DATABASE_URL: postgresql+psycopg2://recall:recall@postgres:5432/recall
-      JWT_SECRET: changeme
+      JWT_SECRET: ${JWT_SECRET:?set-a-strong-jwt-secret}
       MEDIA_DIR: /media
+      RECALL_CORS_ORIGINS: ${RECALL_CORS_ORIGINS:-http://localhost,http://127.0.0.1}
     volumes:
       - ../media:/media
     depends_on:

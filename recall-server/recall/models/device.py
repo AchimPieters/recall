@@ -1,7 +1,11 @@
-from datetime import datetime
+from datetime import datetime, timezone
 from sqlalchemy import JSON, DateTime, ForeignKey, Integer, String
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 from recall.db.database import Base
+
+
+def utc_now() -> datetime:
+    return datetime.now(timezone.utc)
 
 
 class Device(Base):
@@ -31,6 +35,6 @@ class DeviceLog(Base):
     level: Mapped[str] = mapped_column(String(32), default="info")
     action: Mapped[str] = mapped_column(String(128), default="log")
     message: Mapped[str] = mapped_column(String(4096))
-    timestamp: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+    timestamp: Mapped[datetime] = mapped_column(DateTime, default=utc_now)
 
     device: Mapped[Device] = relationship(back_populates="logs")

@@ -2,7 +2,7 @@ from fastapi.testclient import TestClient
 
 from recall.api.main import app
 from recall.core.security import get_password_hash
-from recall.db.database import SessionLocal
+from recall.db.database import Base, SessionLocal, engine
 from recall.models.settings import User
 
 
@@ -10,6 +10,7 @@ client = TestClient(app)
 
 
 def _ensure_admin() -> None:
+    Base.metadata.create_all(bind=engine)
     db = SessionLocal()
     try:
         admin = db.query(User).filter(User.username == "admin").first()

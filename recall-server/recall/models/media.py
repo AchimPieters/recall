@@ -1,7 +1,11 @@
-from datetime import datetime
+from datetime import datetime, timezone
 from sqlalchemy import DateTime, ForeignKey, Integer, String
 from sqlalchemy.orm import Mapped, mapped_column
 from recall.db.database import Base
+
+
+def utc_now() -> datetime:
+    return datetime.now(timezone.utc)
 
 
 class Media(Base):
@@ -16,7 +20,7 @@ class Media(Base):
     mime_type: Mapped[str] = mapped_column(String(128), nullable=False)
     thumbnail_path: Mapped[str | None] = mapped_column(String(1024), nullable=True)
     duration_seconds: Mapped[int | None] = mapped_column(Integer, nullable=True)
-    uploaded_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+    uploaded_at: Mapped[datetime] = mapped_column(DateTime, default=utc_now)
 
 
 class Playlist(Base):
