@@ -5,6 +5,7 @@
 
 ## System health & ops
 - `GET /health`
+- `GET /live`
 - `GET /ready`
 - `GET /metrics`
 - `GET /monitor`
@@ -25,6 +26,13 @@
 - `GET /settings`
 - `POST /settings`
 - `POST /settings/apply`
+
+`/settings` and `/settings/apply` accept only an allowlisted schema:
+`site_name`, `timezone`, `language`, `heartbeat_interval`,
+`default_playlist_id`, `display_brightness`, `volume`.
+
+## Events
+- `GET /events` (admin/operator)
 
 ## Playlists & scheduling
 - `POST /playlists`

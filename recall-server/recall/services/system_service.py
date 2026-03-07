@@ -1,16 +1,25 @@
 import subprocess  # nosec B404
+
 from recall.models.device import DeviceLog
+from recall.services.event_service import EventService
 
 
 class SystemService:
     def __init__(self, db):
         self.db = db
+        self.events = EventService(db)
 
     def _audit(self, action: str, message: str) -> None:
         self.db.add(
             DeviceLog(device_id="system", level="audit", action=action, message=message)
         )
         self.db.commit()
+        self.events.publish(
+            category="system",
+            action=action,
+            actor="system",
+            payload={"message": message},
+        )
 
     def reboot(self, confirmed: bool, actor: str) -> dict:
         if not confirmed:

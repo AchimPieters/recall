@@ -6,6 +6,7 @@ from recall.models.device import (
     DeviceLog,
     DeviceScreenshot,
 )
+from recall.models.event import Event
 from recall.models.media import Layout, Media, Playlist, PlaylistItem, Schedule
 from recall.models.settings import Organization, Setting, User
 
@@ -16,6 +17,7 @@ __all__ = [
     "DeviceGroupMember",
     "DeviceLog",
     "DeviceScreenshot",
+    "Event",
     "Layout",
     "Media",
     "Playlist",

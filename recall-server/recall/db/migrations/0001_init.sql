@@ -101,3 +101,13 @@ CREATE TABLE IF NOT EXISTS device_screenshots (
   image_path VARCHAR(1024) NOT NULL,
   captured_at TIMESTAMP NOT NULL DEFAULT NOW()
 );
+
+
+CREATE TABLE IF NOT EXISTS events (
+  id SERIAL PRIMARY KEY,
+  category VARCHAR(64) NOT NULL,
+  action VARCHAR(128) NOT NULL,
+  actor VARCHAR(255) NOT NULL DEFAULT 'system',
+  payload TEXT NOT NULL DEFAULT '{}',
+  created_at TIMESTAMP NOT NULL DEFAULT NOW()
+);

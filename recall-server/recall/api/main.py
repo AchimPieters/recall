@@ -18,7 +18,15 @@ from slowapi.util import get_remote_address
 from sqlalchemy import text
 from sqlalchemy.orm import Session
 
-from recall.api.routes import devices, media, monitor, playlists, settings, system
+from recall.api.routes import (
+    devices,
+    events,
+    media,
+    monitor,
+    playlists,
+    settings,
+    system,
+)
 from recall.core.config import get_settings
 from recall.core.security import create_access_token, get_password_hash, verify_password
 from recall.db.database import Base, engine, get_db
@@ -71,7 +79,7 @@ async def lifespan(_: FastAPI):
 
 app = FastAPI(title=settings_conf.app_name, lifespan=lifespan)
 app.state.limiter = limiter
-app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
+app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)  # type: ignore[arg-type]
 
 app.add_middleware(
     CORSMiddleware,
@@ -86,6 +94,7 @@ if WEB_DIR.exists():
 
 app.include_router(devices.router)
 app.include_router(media.router)
+app.include_router(events.router)
 app.include_router(monitor.router)
 app.include_router(settings.router)
 app.include_router(playlists.router)
