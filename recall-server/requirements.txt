@@ -12,3 +12,7 @@ prometheus-client
 slowapi
 redis
 structlog
+
+pytest
+pytest-asyncio
+httpx

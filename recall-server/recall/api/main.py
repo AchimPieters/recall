@@ -1,14 +1,17 @@
 import logging
 from pathlib import Path
 import structlog
-from fastapi import Depends, FastAPI, HTTPException
+from fastapi import Depends, FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import PlainTextResponse
 from fastapi.security import OAuth2PasswordRequestForm
 from fastapi.staticfiles import StaticFiles
 from prometheus_client import CONTENT_TYPE_LATEST, Gauge, generate_latest
 from slowapi import Limiter
+from slowapi.errors import RateLimitExceeded
+from slowapi.extension import _rate_limit_exceeded_handler
 from slowapi.util import get_remote_address
+from sqlalchemy import text
 from sqlalchemy.orm import Session
 
 from recall.api.routes import devices, media, monitor, settings, system
@@ -28,6 +31,7 @@ logger = structlog.get_logger(service="recall-api")
 limiter = Limiter(key_func=get_remote_address)
 app = FastAPI(title=settings_conf.app_name)
 app.state.limiter = limiter
+app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
 
 app.add_middleware(
     CORSMiddleware,
@@ -67,7 +71,18 @@ def bootstrap() -> None:
             db.commit()
     finally:
         db_gen.close()
-    logger.info("startup", action="bootstrap")
+    logger.info("startup", action="bootstrap", status="ok")
+
+
+@app.middleware("http")
+async def request_logger(request: Request, call_next):
+    response = await call_next(request)
+    logger.info(
+        "request",
+        action=f"{request.method} {request.url.path}",
+        status=response.status_code,
+    )
+    return response
 
 
 @app.get("/")
@@ -75,9 +90,23 @@ def root():
     return {"status": "recall running"}
 
 
+@app.get("/health")
+def health():
+    return {"status": "ok"}
+
+
+@app.get("/ready")
+def ready(db: Session = Depends(get_db)):
+    db.execute(text("SELECT 1"))
+    return {"status": "ready"}
+
+
 @app.post("/token")
+@limiter.limit("10/minute")
 def login(
-    form_data: OAuth2PasswordRequestForm = Depends(), db: Session = Depends(get_db)
+    request: Request,
+    form_data: OAuth2PasswordRequestForm = Depends(),
+    db: Session = Depends(get_db),
 ):
     user = db.query(User).filter(User.username == form_data.username).first()
     if not user or not verify_password(form_data.password, user.password_hash):

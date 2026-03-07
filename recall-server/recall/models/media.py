@@ -26,6 +26,16 @@ class Playlist(Base):
     name: Mapped[str] = mapped_column(String(255), nullable=False)
 
 
+class PlaylistItem(Base):
+    __tablename__ = "playlist_items"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    playlist_id: Mapped[int] = mapped_column(ForeignKey("playlists.id"), index=True)
+    media_id: Mapped[int] = mapped_column(ForeignKey("media.id"), index=True)
+    position: Mapped[int] = mapped_column(Integer, default=0)
+    duration_seconds: Mapped[int | None] = mapped_column(Integer, nullable=True)
+
+
 class Schedule(Base):
     __tablename__ = "schedules"
 
