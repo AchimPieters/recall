@@ -48,3 +48,11 @@ class Schedule(Base):
     target: Mapped[str] = mapped_column(String(255), default="all")
     starts_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
     ends_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+
+
+class Layout(Base):
+    __tablename__ = "layouts"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    name: Mapped[str] = mapped_column(String(255), nullable=False)
+    definition_json: Mapped[str] = mapped_column(String(16384), nullable=False)

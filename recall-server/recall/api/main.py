@@ -1,6 +1,8 @@
 import logging
+import time
 from pathlib import Path
 from contextlib import asynccontextmanager
+from uuid import uuid4
 
 import structlog
 from fastapi import Depends, FastAPI, HTTPException, Request
@@ -8,7 +10,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import PlainTextResponse
 from fastapi.security import OAuth2PasswordRequestForm
 from fastapi.staticfiles import StaticFiles
-from prometheus_client import CONTENT_TYPE_LATEST, Gauge, generate_latest
+from prometheus_client import CONTENT_TYPE_LATEST, Gauge, Histogram, generate_latest
 from slowapi import Limiter
 from slowapi.errors import RateLimitExceeded
 from slowapi.extension import _rate_limit_exceeded_handler
@@ -18,7 +20,7 @@ from sqlalchemy.orm import Session
 
 from recall.api.routes import devices, media, monitor, playlists, settings, system
 from recall.core.config import get_settings
-from recall.core.security import create_access_token, verify_password, get_password_hash
+from recall.core.security import create_access_token, get_password_hash, verify_password
 from recall.db.database import Base, engine, get_db
 from recall.models import User
 from recall.services.device_service import DeviceService
@@ -91,18 +93,32 @@ app.include_router(system.router)
 
 device_count = Gauge("device_count", "Total devices")
 device_online = Gauge("device_online", "Online devices")
+request_latency = Histogram(
+    "http_request_duration_seconds", "Request latency", ["method", "path"]
+)
 
 
 @app.middleware("http")
 async def request_logger(request: Request, call_next):
+    request_id = request.headers.get("X-Request-ID", uuid4().hex)
+    start = time.perf_counter()
     response = await call_next(request)
+    elapsed = time.perf_counter() - start
+
+    request_latency.labels(request.method, request.url.path).observe(elapsed)
+    response.headers["X-Request-ID"] = request_id
     response.headers["X-Content-Type-Options"] = "nosniff"
     response.headers["X-Frame-Options"] = "DENY"
     response.headers["Referrer-Policy"] = "no-referrer"
+    response.headers["Permissions-Policy"] = "camera=(), microphone=(), geolocation=()"
+    response.headers["Cross-Origin-Opener-Policy"] = "same-origin"
+    response.headers["Cross-Origin-Resource-Policy"] = "same-origin"
     response.headers["Content-Security-Policy"] = "default-src 'self'"
     logger.info(
         "request",
+        request_id=request_id,
         action=f"{request.method} {request.url.path}",
+        latency_ms=round(elapsed * 1000, 2),
         status=response.status_code,
     )
     return response
@@ -116,6 +132,11 @@ def root():
 @app.get("/health")
 def health():
     return {"status": "ok"}
+
+
+@app.get("/live")
+def live():
+    return {"status": "live"}
 
 
 @app.get("/ready")

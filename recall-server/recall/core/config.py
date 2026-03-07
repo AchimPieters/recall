@@ -36,7 +36,9 @@ class Settings(BaseModel):
     bootstrap_admin_password: str = Field(
         default_factory=lambda: os.getenv("RECALL_BOOTSTRAP_ADMIN_PASSWORD", "")
     )
-    clamav_host: str = Field(default_factory=lambda: os.getenv("CLAMAV_HOST", "localhost"))
+    clamav_host: str = Field(
+        default_factory=lambda: os.getenv("CLAMAV_HOST", "localhost")
+    )
     clamav_port: int = int(os.getenv("CLAMAV_PORT", "3310"))
     clamav_fail_open: bool = Field(
         default_factory=lambda: os.getenv("RECALL_CLAMAV_FAIL_OPEN", "false").lower()

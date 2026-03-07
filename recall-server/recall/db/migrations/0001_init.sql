@@ -38,12 +38,26 @@ CREATE TABLE IF NOT EXISTS playlists (
   name VARCHAR(255) NOT NULL
 );
 
+CREATE TABLE IF NOT EXISTS playlist_items (
+  id SERIAL PRIMARY KEY,
+  playlist_id INTEGER NOT NULL,
+  media_id INTEGER NOT NULL,
+  position INTEGER NOT NULL DEFAULT 0,
+  duration_seconds INTEGER NULL
+);
+
 CREATE TABLE IF NOT EXISTS schedules (
   id SERIAL PRIMARY KEY,
   playlist_id INTEGER NOT NULL,
   target VARCHAR(255) NOT NULL,
   starts_at TIMESTAMP NULL,
   ends_at TIMESTAMP NULL
+);
+
+CREATE TABLE IF NOT EXISTS layouts (
+  id SERIAL PRIMARY KEY,
+  name VARCHAR(255) NOT NULL,
+  definition_json VARCHAR(16384) NOT NULL
 );
 
 CREATE TABLE IF NOT EXISTS settings (
@@ -61,10 +75,29 @@ CREATE TABLE IF NOT EXISTS device_logs (
   timestamp TIMESTAMP NOT NULL DEFAULT NOW()
 );
 
-CREATE TABLE IF NOT EXISTS playlist_items (
+CREATE TABLE IF NOT EXISTS device_groups (
   id SERIAL PRIMARY KEY,
-  playlist_id INTEGER NOT NULL,
-  media_id INTEGER NOT NULL,
-  position INTEGER NOT NULL DEFAULT 0,
-  duration_seconds INTEGER NULL
+  name VARCHAR(255) UNIQUE NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS device_group_members (
+  id SERIAL PRIMARY KEY,
+  group_id INTEGER NOT NULL,
+  device_id VARCHAR(64) NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS alerts (
+  id SERIAL PRIMARY KEY,
+  level VARCHAR(32) NOT NULL,
+  source VARCHAR(128) NOT NULL,
+  message VARCHAR(4096) NOT NULL,
+  status VARCHAR(32) NOT NULL,
+  created_at TIMESTAMP NOT NULL DEFAULT NOW()
+);
+
+CREATE TABLE IF NOT EXISTS device_screenshots (
+  id SERIAL PRIMARY KEY,
+  device_id VARCHAR(64) NOT NULL,
+  image_path VARCHAR(1024) NOT NULL,
+  captured_at TIMESTAMP NOT NULL DEFAULT NOW()
 );
