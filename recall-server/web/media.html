@@ -1,3 +1,4 @@
+<!DOCTYPE html>
 <html lang="en">
 <head>
 <meta charset="UTF-8">
@@ -7,16 +8,14 @@
 </head>
 
 <body>
-
 <header class="topbar">
     <div class="nav">
-      <a href="index.html" class="logo">
+      <a href="index.html" class="logo" aria-label="Recall home">
           <img src="recall_logo_bw.svg" alt="Recall">
       </a>
-
         <nav>
             <ul>
-                <li><a href="media.html">Upload Media</a></li>
+                <li><a href="media.html" aria-current="page">Upload Media</a></li>
                 <li><a href="devices.html">Devices</a></li>
                 <li><a href="monitor.html">System Monitor</a></li>
                 <li><a href="settings.html">Settings</a></li>
@@ -26,13 +25,18 @@
 </header>
 
 <main class="container">
-    <h1>Recall Upload Media</h1>
+    <div class="page-header">
+        <h1>Upload Media</h1>
+        <p class="lead">Drop in a file and publish it to your Recall server. Fast upload flow, no unnecessary steps.</p>
+    </div>
 
-    <form action="/media/upload" method="post" enctype="multipart/form-data">
-    <input type="file" name="file">
-    <button>Upload</button>
-    </form>
-
+    <section class="card">
+        <form action="/media/upload" method="post" enctype="multipart/form-data" class="actions">
+            <input class="file-input" type="file" name="file" required>
+            <button type="submit">Upload</button>
+        </form>
+        <p class="status">Supported formats depend on your player configuration.</p>
+    </section>
 </main>
 
 </body>
