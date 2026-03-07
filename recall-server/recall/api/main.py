@@ -16,7 +16,7 @@ from slowapi.util import get_remote_address
 from sqlalchemy import text
 from sqlalchemy.orm import Session
 
-from recall.api.routes import devices, media, monitor, settings, system
+from recall.api.routes import devices, media, monitor, playlists, settings, system
 from recall.core.config import get_settings
 from recall.core.security import create_access_token, verify_password, get_password_hash
 from recall.db.database import Base, engine, get_db
@@ -86,6 +86,7 @@ app.include_router(devices.router)
 app.include_router(media.router)
 app.include_router(monitor.router)
 app.include_router(settings.router)
+app.include_router(playlists.router)
 app.include_router(system.router)
 
 device_count = Gauge("device_count", "Total devices")

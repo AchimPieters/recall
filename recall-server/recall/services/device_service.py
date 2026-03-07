@@ -2,6 +2,7 @@ from datetime import datetime, timedelta, timezone
 from sqlalchemy.orm import Session
 from recall.core.config import get_settings
 from recall.models.device import Device, DeviceLog
+from recall.services.playlist_service import PlaylistService
 
 settings = get_settings()
 
@@ -41,10 +42,12 @@ class DeviceService:
         return device
 
     def get_config(self, device_id: str) -> dict:
+        playlist_id = PlaylistService(self.db).resolve_active_playlist_id(device_id)
         return {
             "device_id": device_id,
             "heartbeat_interval": 30,
             "fallback_content": "default",
+            "active_playlist_id": playlist_id,
         }
 
     def add_log(
