@@ -1,10 +1,11 @@
 version: '3'
 
 services:
-
   recall-server:
-    build: .
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile
     ports:
       - "8000:8000"
     volumes:
-      - ./media:/opt/recall/media
+      - ../media:/app/media
