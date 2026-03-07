@@ -10,7 +10,9 @@ class DeviceService:
     def __init__(self, db: Session):
         self.db = db
 
-    def register(self, device_id: str, name: str, ip: str | None, version: str | None) -> Device:
+    def register(
+        self, device_id: str, name: str, ip: str | None, version: str | None
+    ) -> Device:
         device = self.db.query(Device).filter(Device.id == device_id).first()
         if not device:
             device = Device(id=device_id, name=name)
@@ -35,10 +37,18 @@ class DeviceService:
         return device
 
     def get_config(self, device_id: str) -> dict:
-        return {"device_id": device_id, "heartbeat_interval": 30, "fallback_content": "default"}
+        return {
+            "device_id": device_id,
+            "heartbeat_interval": 30,
+            "fallback_content": "default",
+        }
 
-    def add_log(self, device_id: str, level: str, action: str, message: str) -> DeviceLog:
-        log = DeviceLog(device_id=device_id, level=level, action=action, message=message)
+    def add_log(
+        self, device_id: str, level: str, action: str, message: str
+    ) -> DeviceLog:
+        log = DeviceLog(
+            device_id=device_id, level=level, action=action, message=message
+        )
         self.db.add(log)
         self.db.commit()
         self.db.refresh(log)
@@ -51,7 +61,9 @@ class DeviceService:
         for device in devices:
             if not device.last_seen:
                 new_status = "unreachable"
-            elif now - device.last_seen > timedelta(seconds=settings.heartbeat_timeout_seconds):
+            elif now - device.last_seen > timedelta(
+                seconds=settings.heartbeat_timeout_seconds
+            ):
                 new_status = "offline"
             else:
                 new_status = "online"

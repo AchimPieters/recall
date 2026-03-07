@@ -1,0 +1,5 @@
+skips:
+  - B105  # OAuth2 token_type value flagged incorrectly as password string
+  - B404  # subprocess import used for fixed internal commands
+  - B603  # subprocess with fixed argument lists only
+  - B607  # partial path allowed for target system utilities

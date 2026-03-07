@@ -8,7 +8,9 @@ class Media(Base):
     __tablename__ = "media"
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
-    organization_id: Mapped[int | None] = mapped_column(ForeignKey("organizations.id"), nullable=True)
+    organization_id: Mapped[int | None] = mapped_column(
+        ForeignKey("organizations.id"), nullable=True
+    )
     name: Mapped[str] = mapped_column(String(255), nullable=False)
     path: Mapped[str] = mapped_column(String(1024), nullable=False)
     mime_type: Mapped[str] = mapped_column(String(128), nullable=False)

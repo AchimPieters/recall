@@ -22,4 +22,9 @@ async def upload(file: UploadFile = File(...), db: Session = Depends(get_db)):
         raise HTTPException(400, "Malware detected")
 
     media = service.store_upload(file.filename or "upload.bin", mime, data)
-    return {"id": media.id, "name": media.name, "path": media.path, "thumbnail": media.thumbnail_path}
+    return {
+        "id": media.id,
+        "name": media.name,
+        "path": media.path,
+        "thumbnail": media.thumbnail_path,
+    }

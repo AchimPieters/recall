@@ -57,7 +57,13 @@ def bootstrap() -> None:
     try:
         admin = db.query(User).filter(User.username == "admin").first()
         if not admin:
-            db.add(User(username="admin", password_hash=get_password_hash("admin"), role="admin"))
+            db.add(
+                User(
+                    username="admin",
+                    password_hash=get_password_hash("admin"),
+                    role="admin",
+                )
+            )
             db.commit()
     finally:
         db_gen.close()
@@ -70,12 +76,14 @@ def root():
 
 
 @app.post("/token")
-def login(form_data: OAuth2PasswordRequestForm = Depends(), db: Session = Depends(get_db)):
+def login(
+    form_data: OAuth2PasswordRequestForm = Depends(), db: Session = Depends(get_db)
+):
     user = db.query(User).filter(User.username == form_data.username).first()
     if not user or not verify_password(form_data.password, user.password_hash):
         raise HTTPException(status_code=401, detail="Invalid credentials")
     token = create_access_token(subject=user.username, role=user.role)
-    return {"access_token": token, "token_type": "bearer"}
+    return {"access_token": token, "token_type": "Bearer"}
 
 
 @app.get("/devices")
@@ -90,4 +98,6 @@ def devices_summary(db: Session = Depends(get_db)):
 
 @app.get("/metrics")
 def metrics():
-    return PlainTextResponse(generate_latest().decode("utf-8"), media_type=CONTENT_TYPE_LATEST)
+    return PlainTextResponse(
+        generate_latest().decode("utf-8"), media_type=CONTENT_TYPE_LATEST
+    )

@@ -19,7 +19,14 @@ def set_settings(payload: dict, db: Session = Depends(get_db)):
 
 
 @router.post("/apply", dependencies=[Depends(require_role("admin", "operator"))])
-def apply_settings(payload: dict, confirmed: bool = False, db: Session = Depends(get_db), user: AuthUser = Depends(get_current_user)):
+def apply_settings(
+    payload: dict,
+    confirmed: bool = False,
+    db: Session = Depends(get_db),
+    user: AuthUser = Depends(get_current_user),
+):
     data = SettingsService(db).set_many(payload)
-    SystemService(db)._audit("settings_apply", f"confirmed={confirmed},requested_by={user.username}")
+    SystemService(db)._audit(
+        "settings_apply", f"confirmed={confirmed},requested_by={user.username}"
+    )
     return {"applied": confirmed, "settings": data}

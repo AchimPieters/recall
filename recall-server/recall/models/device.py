@@ -14,9 +14,13 @@ class Device(Base):
     ip: Mapped[str | None] = mapped_column(String(64), nullable=True)
     version: Mapped[str | None] = mapped_column(String(64), nullable=True)
     metrics: Mapped[dict | None] = mapped_column(JSON, nullable=True)
-    organization_id: Mapped[int | None] = mapped_column(ForeignKey("organizations.id"), nullable=True)
+    organization_id: Mapped[int | None] = mapped_column(
+        ForeignKey("organizations.id"), nullable=True
+    )
 
-    logs: Mapped[list["DeviceLog"]] = relationship(back_populates="device", cascade="all, delete-orphan")
+    logs: Mapped[list["DeviceLog"]] = relationship(
+        back_populates="device", cascade="all, delete-orphan"
+    )
 
 
 class DeviceLog(Base):

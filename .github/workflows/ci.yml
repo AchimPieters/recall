@@ -23,7 +23,7 @@ jobs:
       - name: Type check
         run: mypy recall-server/recall || true
       - name: Security scan
-        run: bandit -r recall-server/recall
+        run: bandit -c .bandit -r recall-server/recall
       - name: Tests
         run: pytest -q || true
       - name: Docker build

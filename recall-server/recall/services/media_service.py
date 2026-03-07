@@ -1,5 +1,5 @@
 import mimetypes
-import subprocess
+import subprocess  # nosec B404
 from pathlib import Path
 from uuid import uuid4
 from PIL import Image
@@ -26,13 +26,21 @@ class MediaService:
             raise ValueError("Invalid filename")
 
     def store_upload(self, original_name: str, mime_type: str, data: bytes) -> Media:
-        ext = Path(original_name).suffix or mimetypes.guess_extension(mime_type) or ".bin"
+        ext = (
+            Path(original_name).suffix or mimetypes.guess_extension(mime_type) or ".bin"
+        )
         filename = f"{uuid4().hex}{ext}"
         path = self.media_dir / filename
         path.write_bytes(data)
         thumb = self._thumbnail(path, mime_type)
         duration = self._duration(path, mime_type)
-        media = Media(name=original_name, path=str(path), mime_type=mime_type, thumbnail_path=thumb, duration_seconds=duration)
+        media = Media(
+            name=original_name,
+            path=str(path),
+            mime_type=mime_type,
+            thumbnail_path=thumb,
+            duration_seconds=duration,
+        )
         self.db.add(media)
         self.db.commit()
         self.db.refresh(media)
@@ -50,8 +58,17 @@ class MediaService:
     def _duration(self, path: Path, mime_type: str) -> int | None:
         if not mime_type.startswith("video/"):
             return None
-        cmd = ["ffprobe", "-v", "error", "-show_entries", "format=duration", "-of", "default=noprint_wrappers=1:nokey=1", str(path)]
-        proc = subprocess.run(cmd, capture_output=True, text=True)
+        cmd = [
+            "ffprobe",
+            "-v",
+            "error",
+            "-show_entries",
+            "format=duration",
+            "-of",
+            "default=noprint_wrappers=1:nokey=1",
+            str(path),
+        ]
+        proc = subprocess.run(cmd, capture_output=True, text=True)  # nosec B603
         if proc.returncode != 0:
             return None
         try:
