@@ -1,46 +1,191 @@
-
-
 <!DOCTYPE html>
 <html lang="en">
+
 <head>
+
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
+
 <title>Recall System Monitor</title>
+
 <link rel="stylesheet" href="style.css">
+
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+
+<style>
+
+.stats{
+display:grid;
+grid-template-columns:1fr 1fr;
+gap:30px;
+margin-top:30px;
+}
+
+.card{
+background:white;
+padding:20px;
+border-radius:10px;
+box-shadow:0 3px 10px rgba(0,0,0,0.1);
+}
+
+.chart{
+height:250px;
+}
+
+</style>
+
 </head>
 
 <body>
 
 <header class="topbar">
-    <div class="nav">
-      <a href="index.html" class="logo">
-          <img src="recall_logo_bw.svg" alt="Recall">
-      </a>
+<div class="nav">
 
-        <nav>
-            <ul>
-                <li><a href="media.html">Upload Media</a></li>
-                <li><a href="devices.html">Devices</a></li>
-                <li><a href="monitor.html">System Monitor</a></li>
-            </ul>
-        </nav>
-    </div>
+<a href="index.html" class="logo">
+<img src="recall_logo_bw.svg" alt="Recall">
+</a>
+
+<nav>
+<ul>
+<li><a href="media.html">Upload Media</a></li>
+<li><a href="devices.html">Devices</a></li>
+<li><a href="monitor.html">System Monitor</a></li>
+<li><a href="settings.html">Settings</a></li>
+</ul>
+</nav>
+
+</div>
 </header>
 
 <main class="container">
-    <h1>Recall System Monitor</h1>
 
-    <script>
-    async function load(){
-    let r=await fetch("/monitor")
-    let j=await r.json()
-    document.getElementById("stats").innerText=JSON.stringify(j,null,2)
-    }
-    setInterval(load,2000)
-    </script>
+<h1>Recall System Monitor</h1>
 
+<div class="stats">
+
+<div class="card">
+<h2>CPU Load</h2>
+<canvas id="cpuChart" class="chart"></canvas>
+</div>
+
+<div class="card">
+<h2>Memory Load</h2>
+<canvas id="memChart" class="chart"></canvas>
+</div>
+
+<div class="card">
+<h2>Technical Data</h2>
+<pre id="info"></pre>
+</div>
+
+<div class="card">
+<h2>CPU Temperature</h2>
+<div id="temp"></div>
+</div>
+
+</div>
 
 </main>
+
+<script>
+
+let cpuData=[]
+let memData=[]
+let labels=[]
+
+const cpuChart = new Chart(
+document.getElementById("cpuChart"),
+{
+type:'line',
+data:{
+labels:labels,
+datasets:[{
+label:"CPU %",
+data:cpuData,
+fill:false
+}]
+}
+})
+
+const memChart = new Chart(
+document.getElementById("memChart"),
+{
+type:'line',
+data:{
+labels:labels,
+datasets:[{
+label:"Memory %",
+data:memData,
+fill:false
+}]
+}
+})
+
+async function load(){
+
+let r = await fetch("/monitor")
+let j = await r.json()
+
+let t = new Date().toLocaleTimeString()
+
+labels.push(t)
+cpuData.push(j.cpu_percent || 0)
+memData.push(j.memory_percent || 0)
+
+if(labels.length>30){
+labels.shift()
+cpuData.shift()
+memData.shift()
+}
+
+cpuChart.update()
+memChart.update()
+
+document.getElementById("info").innerText =
+`CPU cores: ${j.cpu_cores}
+CPU freq: ${j.cpu_freq_mhz} MHz
+
+Memory total: ${j.memory_total_mb} MB
+Memory used: ${j.memory_used_mb} MB
+
+Disk total: ${j.disk_total_gb} GB
+Disk used: ${j.disk_used_gb} GB
+
+System: ${j.system}
+Machine: ${j.machine}`
+
+document.getElementById("temp").innerText =
+(j.cpu_temp || "--") + " °C"
+
+if(j.mock){
+document.getElementById("temp").innerText += " (mock)"
+}
+
+cpuChart.update()
+memChart.update()
+
+document.getElementById("info").innerText =
+`CPU cores: ${j.cpu_cores}
+CPU freq: ${j.cpu_freq_mhz} MHz
+
+Memory total: ${j.memory_total_mb} MB
+Memory used: ${j.memory_used_mb} MB
+
+Disk total: ${j.disk_total_gb} GB
+Disk used: ${j.disk_used_gb} GB
+
+System: ${j.system}
+Machine: ${j.machine}`
+
+document.getElementById("temp").innerText =
+j.cpu_temp + " °C"
+
+}
+
+setInterval(load,2000)
+load()
+
+</script>
 
 </body>
 </html>
