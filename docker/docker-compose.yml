@@ -1,11 +1,32 @@
-version: '3'
+version: '3.9'
 
 services:
-  recall-server:
+  recall-api:
     build:
       context: ..
       dockerfile: docker/Dockerfile
     ports:
       - "8000:8000"
+    environment:
+      DATABASE_URL: postgresql+psycopg2://recall:recall@postgres:5432/recall
+      JWT_SECRET: changeme
+      MEDIA_DIR: /media
     volumes:
-      - ../media:/app/media
+      - ../media:/media
+    depends_on:
+      - postgres
+      - redis
+
+  postgres:
+    image: postgres:16
+    environment:
+      POSTGRES_DB: recall
+      POSTGRES_USER: recall
+      POSTGRES_PASSWORD: recall
+    ports:
+      - "5432:5432"
+
+  redis:
+    image: redis:7
+    ports:
+      - "6379:6379"
