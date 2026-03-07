@@ -27,6 +27,11 @@ class SchedulePayload(BaseModel):
     ends_at: datetime | None = None
 
 
+class LayoutPayload(BaseModel):
+    name: str = Field(min_length=1, max_length=255)
+    definition_json: str = Field(min_length=2, max_length=16384)
+
+
 @router.post("", dependencies=[Depends(require_role("admin", "operator"))])
 def create_playlist(payload: PlaylistCreatePayload, db: Session = Depends(get_db)):
     playlist = PlaylistService(db).create_playlist(payload.name)
@@ -42,7 +47,9 @@ def list_playlists(db: Session = Depends(get_db)):
 @router.post(
     "/{playlist_id}/items", dependencies=[Depends(require_role("admin", "operator"))]
 )
-def add_item(playlist_id: int, payload: PlaylistItemPayload, db: Session = Depends(get_db)):
+def add_item(
+    playlist_id: int, payload: PlaylistItemPayload, db: Session = Depends(get_db)
+):
     svc = PlaylistService(db)
     item = svc.add_item(
         playlist_id,
@@ -60,7 +67,8 @@ def add_item(playlist_id: int, payload: PlaylistItemPayload, db: Session = Depen
 
 
 @router.get(
-    "/{playlist_id}/items", dependencies=[Depends(require_role("admin", "operator", "viewer"))]
+    "/{playlist_id}/items",
+    dependencies=[Depends(require_role("admin", "operator", "viewer"))],
 )
 def get_items(playlist_id: int, db: Session = Depends(get_db)):
     items = PlaylistService(db).get_items(playlist_id)
@@ -100,3 +108,27 @@ def schedule_playlist(
         "starts_at": schedule.starts_at,
         "ends_at": schedule.ends_at,
     }
+
+
+@router.post("/layouts", dependencies=[Depends(require_role("admin", "operator"))])
+def create_layout(payload: LayoutPayload, db: Session = Depends(get_db)):
+    layout = PlaylistService(db).create_layout(payload.name, payload.definition_json)
+    return {
+        "id": layout.id,
+        "name": layout.name,
+        "definition_json": layout.definition_json,
+    }
+
+
+@router.get(
+    "/layouts", dependencies=[Depends(require_role("admin", "operator", "viewer"))]
+)
+def list_layouts(db: Session = Depends(get_db)):
+    return [
+        {
+            "id": layout.id,
+            "name": layout.name,
+            "definition_json": layout.definition_json,
+        }
+        for layout in PlaylistService(db).list_layouts()
+    ]

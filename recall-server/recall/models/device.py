@@ -38,3 +38,38 @@ class DeviceLog(Base):
     timestamp: Mapped[datetime] = mapped_column(DateTime, default=utc_now)
 
     device: Mapped[Device] = relationship(back_populates="logs")
+
+
+class DeviceGroup(Base):
+    __tablename__ = "device_groups"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    name: Mapped[str] = mapped_column(String(255), unique=True, nullable=False)
+
+
+class DeviceGroupMember(Base):
+    __tablename__ = "device_group_members"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    group_id: Mapped[int] = mapped_column(ForeignKey("device_groups.id"), index=True)
+    device_id: Mapped[str] = mapped_column(ForeignKey("devices.id"), index=True)
+
+
+class Alert(Base):
+    __tablename__ = "alerts"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    level: Mapped[str] = mapped_column(String(32), nullable=False, default="warning")
+    source: Mapped[str] = mapped_column(String(128), nullable=False, default="system")
+    message: Mapped[str] = mapped_column(String(4096), nullable=False)
+    status: Mapped[str] = mapped_column(String(32), nullable=False, default="open")
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=utc_now)
+
+
+class DeviceScreenshot(Base):
+    __tablename__ = "device_screenshots"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    device_id: Mapped[str] = mapped_column(ForeignKey("devices.id"), index=True)
+    image_path: Mapped[str] = mapped_column(String(1024), nullable=False)
+    captured_at: Mapped[datetime] = mapped_column(DateTime, default=utc_now)

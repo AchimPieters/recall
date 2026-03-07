@@ -1,8 +1,19 @@
 import psutil
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, HTTPException
+from pydantic import BaseModel, Field
+from sqlalchemy.orm import Session
+
 from recall.core.auth import require_role
+from recall.db.database import get_db
+from recall.services.device_service import DeviceService
 
 router = APIRouter(prefix="/monitor", tags=["monitor"])
+
+
+class AlertPayload(BaseModel):
+    level: str = Field(default="warning", min_length=3, max_length=32)
+    source: str = Field(default="system", min_length=1, max_length=128)
+    message: str = Field(min_length=1, max_length=4096)
 
 
 @router.get("", dependencies=[Depends(require_role("admin", "operator", "viewer"))])
@@ -14,3 +25,46 @@ def monitor():
         "memory_usage": vm.percent,
         "disk_usage": disk.percent,
     }
+
+
+@router.post("/alerts", dependencies=[Depends(require_role("admin", "operator"))])
+def create_alert(payload: AlertPayload, db: Session = Depends(get_db)):
+    alert = DeviceService(db).create_alert(
+        payload.level, payload.source, payload.message
+    )
+    return {
+        "id": alert.id,
+        "level": alert.level,
+        "source": alert.source,
+        "message": alert.message,
+        "status": alert.status,
+        "created_at": alert.created_at,
+    }
+
+
+@router.get(
+    "/alerts", dependencies=[Depends(require_role("admin", "operator", "viewer"))]
+)
+def list_alerts(status: str | None = None, db: Session = Depends(get_db)):
+    return [
+        {
+            "id": alert.id,
+            "level": alert.level,
+            "source": alert.source,
+            "message": alert.message,
+            "status": alert.status,
+            "created_at": alert.created_at,
+        }
+        for alert in DeviceService(db).list_alerts(status=status)
+    ]
+
+
+@router.post(
+    "/alerts/{alert_id}/resolve",
+    dependencies=[Depends(require_role("admin", "operator"))],
+)
+def resolve_alert(alert_id: int, db: Session = Depends(get_db)):
+    alert = DeviceService(db).resolve_alert(alert_id)
+    if not alert:
+        raise HTTPException(status_code=404, detail="alert not found")
+    return {"id": alert.id, "status": alert.status}

@@ -22,8 +22,12 @@ class MediaService:
             raise ValueError("Upload too large")
         if not any(mime_type.startswith(prefix) for prefix in ALLOWED_MIME_PREFIXES):
             raise ValueError("Unsupported MIME type")
-        if Path(filename).name in {"", ".", ".."}:
+        clean_name = Path(filename).name
+        if clean_name in {"", ".", ".."}:
             raise ValueError("Invalid filename")
+        ext = Path(clean_name).suffix.lower()
+        if ext in {".exe", ".bat", ".cmd", ".sh", ".js", ".jar"}:
+            raise ValueError("Blocked file extension")
 
     def store_upload(self, original_name: str, mime_type: str, data: bytes) -> Media:
         ext = (

@@ -1,7 +1,7 @@
 from datetime import datetime, timezone
 from sqlalchemy.orm import Session
 
-from recall.models.media import Playlist, PlaylistItem, Schedule
+from recall.models.media import Layout, Playlist, PlaylistItem, Schedule
 
 
 class PlaylistService:
@@ -82,9 +82,21 @@ class PlaylistService:
         self.db.refresh(schedule)
         return schedule
 
+    def create_layout(self, name: str, definition_json: str) -> Layout:
+        layout = Layout(name=name, definition_json=definition_json)
+        self.db.add(layout)
+        self.db.commit()
+        self.db.refresh(layout)
+        return layout
+
+    def list_layouts(self) -> list[Layout]:
+        return self.db.query(Layout).order_by(Layout.id.asc()).all()
+
     def resolve_active_playlist_id(self, target: str) -> int | None:
         now = self._utc_now()
-        schedules = self.db.query(Schedule).filter(Schedule.target.in_([target, "all"])).all()
+        schedules = (
+            self.db.query(Schedule).filter(Schedule.target.in_([target, "all"])).all()
+        )
 
         active: list[Schedule] = []
         for sched in schedules:
@@ -102,7 +114,8 @@ class PlaylistService:
         active.sort(
             key=lambda s: (
                 0 if s.target == target else 1,
-                self._normalize(s.starts_at) or datetime.min.replace(tzinfo=timezone.utc),
+                self._normalize(s.starts_at)
+                or datetime.min.replace(tzinfo=timezone.utc),
                 s.id,
             ),
             reverse=True,

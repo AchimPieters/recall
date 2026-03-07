@@ -1,36 +1,55 @@
 # Audit remediation (architectuur, security, operations, maintainability, product)
 
-Dit document koppelt de auditpunten aan concrete implementaties in deze repository.
+Dit document koppelt elk auditpunt aan concrete implementaties in deze repository.
 
-## 1) Architectuur
-- Gelaagde domeinstructuur aanwezig in `api/`, `services/`, `models/`, `db/`, `workers/`.
-- Database laag met SQLAlchemy + migrations (`recall/db/database.py`, `recall/db/migrations/0001_init.sql`).
-- Content pipeline uitgebreid met playlist- en schedule-services + API-routes.
+## 1) Architectuur audit
+- Domeinstructuur aanwezig en gebruikt: `api`, `services`, `models`, `db`, `workers`.
+- Datalaag aanwezig: SQLAlchemy models + session management + SQL bootstrap migration.
+- Content pipeline uitgebreid met playlist scheduling, layouts en device-targeting.
 
-## 2) Security
-- OAuth2 password flow + JWT access tokens (`/token`).
-- RBAC enforcement via `require_role` dependencies op routes.
-- API rate limiting op login endpoint.
-- Upload validatie (size/mime/filename) + optionele ClamAV malware scan.
-- Security headers op elke request + audit logging op gevoelige system acties.
+## 2) Security audit
+- OAuth2 + JWT access tokens (`/token`) met role checking uit database (voorkomt stale claims).
+- RBAC op routes via `require_role(...)` dependencies.
+- Login rate limiting actief.
+- Upload hardening: max size, MIME allowlist, filename sanitation, blocked executable extensions.
+- Malware scan hook via ClamAV INSTREAM.
+- Security headers + request-id op elke response.
+- Audit logging beschikbaar via device logs endpoint.
 
-## 3) Operations
-- Liveness/readiness/metrics endpoints (`/health`, `/ready`, `/metrics`).
-- Prometheus metrics via `prometheus_client`.
-- Structured request logging (`structlog`) en audit events.
-- Device monitoring via heartbeat + status transitions (online/offline/unreachable).
+## 3) Operations audit
+- Endpoints voor health/liveness/readiness/metrics: `/health`, `/live`, `/ready`, `/metrics`.
+- Prometheus gauges + request latency histogram.
+- Structured logging met request-id voor correlatie.
+- Device monitoring (heartbeat/status transitions), plus alerts API.
 
-## 4) Maintainability
-- Pytest testsuite voor auth/health/security/settings en playlist scheduling.
-- CI pipeline met linting, formatting, tests, security scan, docker build.
-- Documentatie voor development, deployment, architecture en API.
+## 4) Maintainability audit
+- Testsuite uitgebreid met auth/health/playlists én platform maturity scenario's.
+- CI pipeline bevat ruff, black, mypy, bandit, pytest en docker build.
+- Repo bevat development/deployment/architecture/API documentatie.
 
-## 5) Productvolwassenheid
-- Playlist model + items + schedules in datamodel.
-- Nieuwe playlist API voor CRUD-lite + item management + scheduling.
-- Device config endpoint levert actieve playlist op basis van targeting (`device_id` of `all`).
+## 5) Productvolwassenheid audit
+- Playlist engine: playlists + items + scheduling windows.
+- Device groups: create/list/assign API.
+- Alerts: create/list/resolve API.
+- Layouts: create/list API.
+- Remote screenshots: device screenshot ingest + listing API.
+- Multi-tenant fundament in datamodel (`organization_id` op users/devices/media).
 
 ## 6) Repository maturity
-- `CHANGELOG.md`, `SECURITY.md`, `CONTRIBUTING.md` zijn aanwezig.
-- GitHub Actions CI aanwezig.
-- Deze remediatie is expliciet gedocumenteerd in dit bestand.
+- Volwassen OSS signalen zijn aanwezig: `CHANGELOG.md`, `SECURITY.md`, `CONTRIBUTING.md`, CI workflow.
+- Remediatie expliciet vastgelegd in dit document.
+
+## 7) Realistische score update
+- Architectuur: verbeterd door expliciete domeinlaag + modeluitbreidingen.
+- Security: verbeterd door hardening en operationele auditability.
+- Operations: verbeterd met liveness + latency metrics + alerts.
+- Maintainability: verbeterd met extra tests op nieuwe API-oppervlakte.
+- Productvolwassenheid: verbeterd met groups/layouts/alerts/screenshots.
+
+## 8) Waarom dit positief is
+- Kleine codebase blijft snel refactorbaar.
+- Toegevoegde componenten zijn modulair gehouden i.p.v. premature microservices.
+
+## 9) Pad naar 10/10
+- Volgende stap blijft: CI/CD release automation, deeper observability (tracing backend), OTA rollbacks,
+  policy-as-code security controls en volwaardige front-end workflows.

@@ -47,7 +47,9 @@ def test_playlist_schedule_and_device_config_resolution() -> None:
     )
     assert scheduled.status_code == 200
 
-    config = client.get("/device/config", headers=headers, params={"device_id": "dev-1"})
+    config = client.get(
+        "/device/config", headers=headers, params={"device_id": "dev-1"}
+    )
     assert config.status_code == 200
     assert config.json()["active_playlist_id"] == playlist_id
 
