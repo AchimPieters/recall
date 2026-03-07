@@ -1,0 +1,203 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Recall Settings</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<header class="topbar">
+    <div class="nav">
+      <a href="index.html" class="logo">
+          <img src="recall_logo_bw.svg" alt="Recall">
+      </a>
+        <nav>
+            <ul>
+                <li><a href="media.html">Upload Media</a></li>
+                <li><a href="devices.html">Devices</a></li>
+                <li><a href="monitor.html">System Monitor</a></li>
+                <li><a href="settings.html">Settings</a></li>
+            </ul>
+        </nav>
+    </div>
+</header>
+
+<main class="container">
+    <h1>Recall Settings</h1>
+
+    <div class="tabs" role="tablist">
+        <button class="tab active" data-tab="device" role="tab">Device</button>
+        <button class="tab" data-tab="display" role="tab">Display</button>
+        <button class="tab" data-tab="system" role="tab">System</button>
+    </div>
+
+    <section id="tab-device" class="tab-panel active">
+        <h2>Device</h2>
+        <div class="field-row">
+            <label for="device_name">Device naam</label>
+            <input id="device_name" type="text" placeholder="Recall-01">
+        </div>
+        <div class="field-row inline">
+            <label for="kiosk_mode">Kiosk mode (Chromium --kiosk)</label>
+            <input id="kiosk_mode" type="checkbox">
+        </div>
+    </section>
+
+    <section id="tab-display" class="tab-panel">
+        <h2>Display</h2>
+        <div class="field-row">
+            <label for="resolution">Resolutie</label>
+            <input id="resolution" type="text" placeholder="1920x1080@60">
+        </div>
+        <div class="field-row">
+            <label for="rotation">Rotatie</label>
+            <select id="rotation">
+                <option value="0">0°</option>
+                <option value="1">90°</option>
+                <option value="2">180°</option>
+                <option value="3">270°</option>
+            </select>
+        </div>
+        <div class="field-row">
+            <label for="brightness">Brightness</label>
+            <input id="brightness" type="range" min="0.2" max="1.2" step="0.1" value="1">
+            <span id="brightness_value">1.0</span>
+        </div>
+        <div class="field-row">
+            <label for="hdmi_group">HDMI group</label>
+            <input id="hdmi_group" type="number" min="0" max="2">
+        </div>
+        <div class="field-row">
+            <label for="hdmi_mode">HDMI mode</label>
+            <input id="hdmi_mode" type="number" min="1" max="100">
+        </div>
+
+        <div class="preview-wrap">
+            <div id="screen_preview" class="screen-preview">Live rotatie preview</div>
+        </div>
+
+        <div class="actions">
+            <button id="detect_display">Display detectie</button>
+            <button id="detect_hdmi">Auto HDMI detectie</button>
+        </div>
+        <pre id="display_detect_result">Nog geen detectie uitgevoerd.</pre>
+    </section>
+
+    <section id="tab-system" class="tab-panel">
+        <h2>System</h2>
+        <div class="actions">
+            <button id="save">Save settings</button>
+            <button id="apply">Apply display settings</button>
+            <button id="reboot">Remote reboot</button>
+            <button id="update">Remote update</button>
+        </div>
+        <h3>Toekomstige opties</h3>
+        <p class="muted">Hier kun je later extra Recall instellingen toevoegen zoals netwerk, audio en schema's.</p>
+        <pre id="system_result">Klaar.</pre>
+    </section>
+</main>
+
+<script>
+const tabs = document.querySelectorAll('.tab')
+const panels = document.querySelectorAll('.tab-panel')
+const brightness = document.getElementById('brightness')
+const brightnessValue = document.getElementById('brightness_value')
+const preview = document.getElementById('screen_preview')
+
+function setActiveTab(tabName) {
+  tabs.forEach(t => t.classList.toggle('active', t.dataset.tab === tabName))
+  panels.forEach(p => p.classList.toggle('active', p.id === `tab-${tabName}`))
+}
+
+tabs.forEach(tab => tab.addEventListener('click', () => setActiveTab(tab.dataset.tab)))
+
+function updatePreview() {
+  const rotation = Number(document.getElementById('rotation').value || 0)
+  preview.style.transform = `rotate(${rotation * 90}deg)`
+}
+
+document.getElementById('rotation').addEventListener('change', updatePreview)
+brightness.addEventListener('input', () => {
+  brightnessValue.innerText = Number(brightness.value).toFixed(1)
+})
+
+function readForm() {
+  return {
+    device_name: document.getElementById('device_name').value,
+    kiosk_mode: document.getElementById('kiosk_mode').checked,
+    resolution: document.getElementById('resolution').value,
+    display_rotate: Number(document.getElementById('rotation').value),
+    hdmi_group: Number(document.getElementById('hdmi_group').value || 0),
+    hdmi_mode: Number(document.getElementById('hdmi_mode').value || 0),
+    brightness: Number(document.getElementById('brightness').value)
+  }
+}
+
+function loadForm(data) {
+  document.getElementById('device_name').value = data.device_name || ''
+  document.getElementById('kiosk_mode').checked = !!data.kiosk_mode
+  document.getElementById('resolution').value = data.resolution || ''
+  document.getElementById('rotation').value = String(data.display_rotate ?? 0)
+  document.getElementById('hdmi_group').value = data.hdmi_group ?? ''
+  document.getElementById('hdmi_mode').value = data.hdmi_mode ?? ''
+  document.getElementById('brightness').value = data.brightness ?? 1.0
+  brightnessValue.innerText = Number(data.brightness ?? 1.0).toFixed(1)
+  updatePreview()
+}
+
+async function loadSettings() {
+  const r = await fetch('/settings')
+  const j = await r.json()
+  loadForm(j)
+}
+
+async function postJson(path, data) {
+  const r = await fetch(path, {
+    method: 'POST',
+    headers: {'Content-Type': 'application/json'},
+    body: JSON.stringify(data)
+  })
+  return r.json()
+}
+
+document.getElementById('save').addEventListener('click', async () => {
+  const result = await postJson('/settings', readForm())
+  document.getElementById('system_result').innerText = JSON.stringify(result, null, 2)
+})
+
+document.getElementById('apply').addEventListener('click', async () => {
+  const result = await postJson('/settings/apply', readForm())
+  document.getElementById('system_result').innerText = JSON.stringify(result, null, 2)
+})
+
+document.getElementById('reboot').addEventListener('click', async () => {
+  const result = await postJson('/system/reboot', {})
+  document.getElementById('system_result').innerText = JSON.stringify(result, null, 2)
+})
+
+document.getElementById('update').addEventListener('click', async () => {
+  const result = await postJson('/system/update', {})
+  document.getElementById('system_result').innerText = JSON.stringify(result, null, 2)
+})
+
+document.getElementById('detect_display').addEventListener('click', async () => {
+  const r = await fetch('/display/detect')
+  const j = await r.json()
+  document.getElementById('display_detect_result').innerText = JSON.stringify(j, null, 2)
+})
+
+document.getElementById('detect_hdmi').addEventListener('click', async () => {
+  const r = await fetch('/display/hdmi/auto')
+  const j = await r.json()
+  document.getElementById('display_detect_result').innerText = JSON.stringify(j, null, 2)
+  if (j.hdmi_group != null) document.getElementById('hdmi_group').value = j.hdmi_group
+  if (j.hdmi_mode != null) document.getElementById('hdmi_mode').value = j.hdmi_mode
+})
+
+loadSettings().catch(() => {
+  document.getElementById('system_result').innerText = 'Kon instellingen niet laden.'
+})
+</script>
+</body>
+</html>
