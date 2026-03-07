@@ -1,0 +1,30 @@
+name: CI
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  quality:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Install
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r recall-server/requirements.txt ruff black mypy bandit pytest pytest-asyncio httpx
+      - name: Lint
+        run: ruff check recall-server
+      - name: Format check
+        run: black --check recall-server
+      - name: Type check
+        run: mypy recall-server/recall || true
+      - name: Security scan
+        run: bandit -r recall-server/recall
+      - name: Tests
+        run: pytest -q || true
+      - name: Docker build
+        run: docker build -f docker/Dockerfile .

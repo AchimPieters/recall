@@ -1,0 +1,93 @@
+import logging
+from pathlib import Path
+import structlog
+from fastapi import Depends, FastAPI, HTTPException
+from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import PlainTextResponse
+from fastapi.security import OAuth2PasswordRequestForm
+from fastapi.staticfiles import StaticFiles
+from prometheus_client import CONTENT_TYPE_LATEST, Gauge, generate_latest
+from slowapi import Limiter
+from slowapi.util import get_remote_address
+from sqlalchemy.orm import Session
+
+from recall.api.routes import devices, media, monitor, settings, system
+from recall.core.config import get_settings
+from recall.core.security import create_access_token, verify_password, get_password_hash
+from recall.db.database import Base, engine, get_db
+from recall.models import User
+from recall.services.device_service import DeviceService
+
+settings_conf = get_settings()
+Base.metadata.create_all(bind=engine)
+
+logging.basicConfig(format="%(message)s", level=logging.INFO)
+structlog.configure(processors=[structlog.processors.JSONRenderer()])
+logger = structlog.get_logger(service="recall-api")
+
+limiter = Limiter(key_func=get_remote_address)
+app = FastAPI(title=settings_conf.app_name)
+app.state.limiter = limiter
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
+WEB_DIR = Path(__file__).resolve().parents[2] / "web"
+if WEB_DIR.exists():
+    app.mount("/web", StaticFiles(directory=str(WEB_DIR), html=True), name="web")
+
+app.include_router(devices.router)
+app.include_router(media.router)
+app.include_router(monitor.router)
+app.include_router(settings.router)
+app.include_router(system.router)
+
+device_count = Gauge("device_count", "Total devices")
+device_online = Gauge("device_online", "Online devices")
+
+
+@app.on_event("startup")
+def bootstrap() -> None:
+    db_gen = get_db()
+    db = next(db_gen)
+    try:
+        admin = db.query(User).filter(User.username == "admin").first()
+        if not admin:
+            db.add(User(username="admin", password_hash=get_password_hash("admin"), role="admin"))
+            db.commit()
+    finally:
+        db_gen.close()
+    logger.info("startup", action="bootstrap")
+
+
+@app.get("/")
+def root():
+    return {"status": "recall running"}
+
+
+@app.post("/token")
+def login(form_data: OAuth2PasswordRequestForm = Depends(), db: Session = Depends(get_db)):
+    user = db.query(User).filter(User.username == form_data.username).first()
+    if not user or not verify_password(form_data.password, user.password_hash):
+        raise HTTPException(status_code=401, detail="Invalid credentials")
+    token = create_access_token(subject=user.username, role=user.role)
+    return {"access_token": token, "token_type": "bearer"}
+
+
+@app.get("/devices")
+def devices_summary(db: Session = Depends(get_db)):
+    svc = DeviceService(db)
+    svc.mark_presence()
+    devices_list = svc.list_devices()
+    device_count.set(len(devices_list))
+    device_online.set(len([d for d in devices_list if d.status == "online"]))
+    return devices_list
+
+
+@app.get("/metrics")
+def metrics():
+    return PlainTextResponse(generate_latest().decode("utf-8"), media_type=CONTENT_TYPE_LATEST)

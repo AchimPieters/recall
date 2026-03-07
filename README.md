@@ -1,36 +1,25 @@
-
 # Recall
 
-Lightweight Digital Signage platform for Raspberry Pi.
+Production-oriented digital signage platform.
 
-## Install
+## Components
+- `recall-server/recall/api`: FastAPI application and route layer.
+- `recall-server/recall/services`: business logic.
+- `recall-server/recall/models`: SQLAlchemy ORM models.
+- `recall-server/recall/db`: database configuration and migrations.
+- `recall-server/recall/workers`: background tasks.
 
-Run:
+## Quick start
+```bash
+pip install -r recall-server/requirements.txt
+cd recall-server
+uvicorn recall.api.main:app --host 0.0.0.0 --port 8000
+```
 
-bash <(curl -sL https://raw.githubusercontent.com/AchimPieters/recall/main/install.sh)
+## Docker
+```bash
+./install-docker.sh
+```
 
-Open:
-
-http://<pi-ip>:8000/web
-
-## Update
-
-sudo /opt/recall/update.sh
-
-## Uninstall
-
-sudo /opt/recall/uninstall.sh
-
-## Local UI Development
-
-Install Flask:
-
-pip install flask
-
-Start dev server:
-
-python tools/server.py
-
-Open:
-
-http://localhost:8080
+## Documentation
+See `docs/` for architecture, API, protocol, deployment, and development docs.
