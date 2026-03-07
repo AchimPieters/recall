@@ -9,7 +9,7 @@
 <body>
 <header class="topbar">
     <div class="nav">
-      <a href="index.html" class="logo">
+      <a href="index.html" class="logo" aria-label="Recall home">
           <img src="recall_logo_bw.svg" alt="Recall">
       </a>
         <nav>
@@ -17,14 +17,17 @@
                 <li><a href="media.html">Upload Media</a></li>
                 <li><a href="devices.html">Devices</a></li>
                 <li><a href="monitor.html">System Monitor</a></li>
-                <li><a href="settings.html">Settings</a></li>
+                <li><a href="settings.html" aria-current="page">Settings</a></li>
             </ul>
         </nav>
     </div>
 </header>
 
 <main class="container">
-    <h1>Recall Settings</h1>
+    <div class="page-header">
+      <h1>Settings</h1>
+      <p class="lead">Clear controls, immediate feedback, and reliable actions so configuration changes are simple and predictable.</p>
+    </div>
 
     <div class="tabs" role="tablist">
         <button class="tab active" data-tab="device" role="tab">Device</button>
@@ -35,7 +38,7 @@
     <section id="tab-device" class="tab-panel active">
         <h2>Device</h2>
         <div class="field-row">
-            <label for="device_name">Device naam</label>
+            <label for="device_name">Device name</label>
             <input id="device_name" type="text" placeholder="Recall-01">
         </div>
         <div class="field-row inline">
@@ -47,11 +50,11 @@
     <section id="tab-display" class="tab-panel">
         <h2>Display</h2>
         <div class="field-row">
-            <label for="resolution">Resolutie</label>
+            <label for="resolution">Resolution</label>
             <input id="resolution" type="text" placeholder="1920x1080@60">
         </div>
         <div class="field-row">
-            <label for="rotation">Rotatie</label>
+            <label for="rotation">Rotation</label>
             <select id="rotation">
                 <option value="0">0°</option>
                 <option value="1">90°</option>
@@ -74,14 +77,14 @@
         </div>
 
         <div class="preview-wrap">
-            <div id="screen_preview" class="screen-preview">Live rotatie preview</div>
+            <div id="screen_preview" class="screen-preview">Live rotation preview</div>
         </div>
 
         <div class="actions">
-            <button id="detect_display">Display detectie</button>
-            <button id="detect_hdmi">Auto HDMI detectie</button>
+            <button id="detect_display" class="secondary">Display detect</button>
+            <button id="detect_hdmi" class="secondary">Auto HDMI detect</button>
         </div>
-        <pre id="display_detect_result">Nog geen detectie uitgevoerd.</pre>
+        <pre id="display_detect_result">No display detection has run yet.</pre>
     </section>
 
     <section id="tab-system" class="tab-panel">
@@ -89,12 +92,12 @@
         <div class="actions">
             <button id="save">Save settings</button>
             <button id="apply">Apply display settings</button>
-            <button id="reboot">Remote reboot</button>
-            <button id="update">Remote update</button>
+            <button id="reboot" class="secondary">Remote reboot</button>
+            <button id="update" class="secondary">Remote update</button>
         </div>
-        <h3>Toekomstige opties</h3>
-        <p class="muted">Hier kun je later extra Recall instellingen toevoegen zoals netwerk, audio en schema's.</p>
-        <pre id="system_result">Klaar.</pre>
+        <h3>Future options</h3>
+        <p class="muted">More options like network, audio, and schedules can be added here later.</p>
+        <pre id="system_result">Ready.</pre>
     </section>
 </main>
 
@@ -148,6 +151,7 @@ function loadForm(data) {
 
 async function loadSettings() {
   const r = await fetch('/settings')
+  if (!r.ok) throw new Error('Failed to load settings')
   const j = await r.json()
   loadForm(j)
 }
@@ -158,45 +162,64 @@ async function postJson(path, data) {
     headers: {'Content-Type': 'application/json'},
     body: JSON.stringify(data)
   })
+  if (!r.ok) throw new Error('Request failed')
   return r.json()
 }
 
+async function withBusy(buttonId, outputId, task) {
+  const button = document.getElementById(buttonId)
+  const output = document.getElementById(outputId)
+  const label = button.innerText
+  button.disabled = true
+  button.innerText = 'Working...'
+  try {
+    const result = await task()
+    output.innerText = JSON.stringify(result, null, 2)
+  } catch (error) {
+    output.innerText = `Operation failed: ${error.message}`
+  } finally {
+    button.disabled = false
+    button.innerText = label
+  }
+}
+
 document.getElementById('save').addEventListener('click', async () => {
-  const result = await postJson('/settings', readForm())
-  document.getElementById('system_result').innerText = JSON.stringify(result, null, 2)
+  await withBusy('save', 'system_result', () => postJson('/settings', readForm()))
 })
 
 document.getElementById('apply').addEventListener('click', async () => {
-  const result = await postJson('/settings/apply', readForm())
-  document.getElementById('system_result').innerText = JSON.stringify(result, null, 2)
+  await withBusy('apply', 'system_result', () => postJson('/settings/apply', readForm()))
 })
 
 document.getElementById('reboot').addEventListener('click', async () => {
-  const result = await postJson('/system/reboot', {})
-  document.getElementById('system_result').innerText = JSON.stringify(result, null, 2)
+  await withBusy('reboot', 'system_result', () => postJson('/system/reboot', {}))
 })
 
 document.getElementById('update').addEventListener('click', async () => {
-  const result = await postJson('/system/update', {})
-  document.getElementById('system_result').innerText = JSON.stringify(result, null, 2)
+  await withBusy('update', 'system_result', () => postJson('/system/update', {}))
 })
 
 document.getElementById('detect_display').addEventListener('click', async () => {
-  const r = await fetch('/display/detect')
-  const j = await r.json()
-  document.getElementById('display_detect_result').innerText = JSON.stringify(j, null, 2)
+  await withBusy('detect_display', 'display_detect_result', async () => {
+    const r = await fetch('/display/detect')
+    if (!r.ok) throw new Error('Detection failed')
+    return r.json()
+  })
 })
 
 document.getElementById('detect_hdmi').addEventListener('click', async () => {
-  const r = await fetch('/display/hdmi/auto')
-  const j = await r.json()
-  document.getElementById('display_detect_result').innerText = JSON.stringify(j, null, 2)
-  if (j.hdmi_group != null) document.getElementById('hdmi_group').value = j.hdmi_group
-  if (j.hdmi_mode != null) document.getElementById('hdmi_mode').value = j.hdmi_mode
+  await withBusy('detect_hdmi', 'display_detect_result', async () => {
+    const r = await fetch('/display/hdmi/auto')
+    if (!r.ok) throw new Error('Auto HDMI detection failed')
+    const j = await r.json()
+    if (j.hdmi_group != null) document.getElementById('hdmi_group').value = j.hdmi_group
+    if (j.hdmi_mode != null) document.getElementById('hdmi_mode').value = j.hdmi_mode
+    return j
+  })
 })
 
 loadSettings().catch(() => {
-  document.getElementById('system_result').innerText = 'Kon instellingen niet laden.'
+  document.getElementById('system_result').innerText = 'Could not load settings.'
 })
 </script>
 </body>
