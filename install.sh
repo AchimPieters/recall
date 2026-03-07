@@ -1,4 +1,3 @@
-
 #!/usr/bin/env bash
 set -e
 
@@ -16,15 +15,16 @@ else
     BROWSER="chromium-browser"
 fi
 
-sudo apt install -y git curl python3 python3-venv python3-pip mpv $BROWSER gstreamer1.0-tools gstreamer1.0-plugins-base gstreamer1.0-plugins-good gstreamer1.0-plugins-bad gstreamer1.0-libav
+sudo apt install -y git curl python3 python3-venv python3-pip mpv "$BROWSER" gstreamer1.0-tools gstreamer1.0-plugins-base gstreamer1.0-plugins-good gstreamer1.0-plugins-bad gstreamer1.0-libav
 
-sudo rm -rf $INSTALL_DIR
-sudo git clone $REPO $INSTALL_DIR
-sudo chown -R $USER:$USER $INSTALL_DIR
+sudo rm -rf "$INSTALL_DIR"
+sudo git clone "$REPO" "$INSTALL_DIR"
+sudo chown -R "$USER":"$USER" "$INSTALL_DIR"
 
-cd $INSTALL_DIR
+cd "$INSTALL_DIR"
 
 python3 -m venv venv
+# shellcheck disable=SC1091
 source venv/bin/activate
 
 pip install --upgrade pip
@@ -32,7 +32,7 @@ pip install fastapi uvicorn psutil requests python-multipart
 
 mkdir -p media
 
-sudo tee /etc/systemd/system/recall-server.service > /dev/null <<EOF
+sudo tee /etc/systemd/system/recall-server.service > /dev/null <<EOF_SERVICE
 [Unit]
 Description=Recall Server
 After=network.target
@@ -45,9 +45,9 @@ Restart=always
 
 [Install]
 WantedBy=multi-user.target
-EOF
+EOF_SERVICE
 
-sudo tee /etc/systemd/system/recall-player.service > /dev/null <<EOF
+sudo tee /etc/systemd/system/recall-player.service > /dev/null <<EOF_SERVICE
 [Unit]
 Description=Recall Player
 After=network.target
@@ -60,7 +60,7 @@ Restart=always
 
 [Install]
 WantedBy=multi-user.target
-EOF
+EOF_SERVICE
 
 sudo systemctl daemon-reload
 sudo systemctl enable recall-server

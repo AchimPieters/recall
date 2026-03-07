@@ -50,7 +50,6 @@ height:250px;
 <li><a href="media.html">Upload Media</a></li>
 <li><a href="devices.html">Devices</a></li>
 <li><a href="monitor.html">System Monitor</a></li>
-<li><a href="settings.html">Settings</a></li>
 </ul>
 </nav>
 
@@ -155,30 +154,7 @@ System: ${j.system}
 Machine: ${j.machine}`
 
 document.getElementById("temp").innerText =
-(j.cpu_temp || "--") + " °C"
-
-if(j.mock){
-document.getElementById("temp").innerText += " (mock)"
-}
-
-cpuChart.update()
-memChart.update()
-
-document.getElementById("info").innerText =
-`CPU cores: ${j.cpu_cores}
-CPU freq: ${j.cpu_freq_mhz} MHz
-
-Memory total: ${j.memory_total_mb} MB
-Memory used: ${j.memory_used_mb} MB
-
-Disk total: ${j.disk_total_gb} GB
-Disk used: ${j.disk_used_gb} GB
-
-System: ${j.system}
-Machine: ${j.machine}`
-
-document.getElementById("temp").innerText =
-j.cpu_temp + " °C"
+(j.cpu_temp || "--") + " °C" + (j.mock ? " (mock)" : "")
 
 }
 

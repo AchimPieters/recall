@@ -1,11 +1,14 @@
-from fastapi import FastAPI, UploadFile
+from fastapi import FastAPI, HTTPException, Request, UploadFile
 from fastapi.staticfiles import StaticFiles
+from pydantic import BaseModel
 from pathlib import Path
-import shutil
 import psutil
 import platform
-import random
-import json
+import secrets
+import logging
+import os
+import time
+from uuid import uuid4
 
 BASE_DIR = Path(__file__).resolve().parent.parent
 WEB_DIR = BASE_DIR / "web"
@@ -15,6 +18,24 @@ MEDIA_DIR.mkdir(exist_ok=True)
 
 app = FastAPI()
 devices = {}
+API_KEY = os.getenv("RECALL_API_KEY")
+MAX_UPLOAD_BYTES = int(os.getenv("RECALL_MAX_UPLOAD_BYTES", str(100 * 1024 * 1024)))
+
+logger = logging.getLogger("recall.api")
+
+
+class DeviceRegistration(BaseModel):
+    id: str
+    status: str = "online"
+
+
+def require_api_key(request: Request):
+    if not API_KEY:
+        return
+
+    provided = request.headers.get("x-api-key")
+    if provided != API_KEY:
+        raise HTTPException(status_code=401, detail="Invalid API key")
 
 app.mount("/web", StaticFiles(directory=str(WEB_DIR), html=True), name="web")
 
@@ -25,13 +46,19 @@ def root():
 
 
 @app.post("/device/register")
-def register(device: dict):
-    devices[device["id"]] = device
+def register(device: DeviceRegistration, request: Request):
+    require_api_key(request)
+    devices[device.id] = {
+        "id": device.id,
+        "status": device.status,
+        "last_seen": int(time.time())
+    }
     return {"status": "registered"}
 
 
 @app.get("/devices")
-def list_devices():
+def list_devices(request: Request):
+    require_api_key(request)
     return devices
 
 
@@ -39,12 +66,13 @@ def get_cpu_temp():
     try:
         with open("/sys/class/thermal/thermal_zone0/temp") as f:
             return round(int(f.read()) / 1000, 1)
-    except:
-        return round(random.uniform(40, 60), 1)   # mock temperature
+    except (FileNotFoundError, PermissionError, ValueError):
+        return round(40 + (secrets.randbelow(200) / 10), 1)   # mock temperature
 
 
 @app.get("/monitor")
-def monitor():
+def monitor(request: Request):
+    require_api_key(request)
 
     try:
         cpu = psutil.cpu_percent()
@@ -75,23 +103,24 @@ def monitor():
             "mock": False
         }
 
-    except:
+    except (OSError, ValueError) as exc:
+        logger.warning("Returning mock monitor data due to read error: %s", exc)
         # volledige mock data fallback
         return {
-            "cpu_percent": random.randint(10,60),
-            "memory_percent": random.randint(20,70),
+            "cpu_percent": 10 + secrets.randbelow(51),
+            "memory_percent": 20 + secrets.randbelow(51),
 
             "cpu_cores": 4,
             "cpu_freq_mhz": 1500,
 
             "memory_total_mb": 2048,
-            "memory_used_mb": random.randint(400,1200),
+            "memory_used_mb": 400 + secrets.randbelow(801),
 
-            "disk_percent": random.randint(30,80),
+            "disk_percent": 30 + secrets.randbelow(51),
             "disk_total_gb": 32,
-            "disk_used_gb": random.randint(10,20),
+            "disk_used_gb": 10 + secrets.randbelow(11),
 
-            "cpu_temp": random.randint(40,65),
+            "cpu_temp": 40 + secrets.randbelow(26),
 
             "system": "Linux",
             "machine": "armv7l",
@@ -102,11 +131,29 @@ def monitor():
 
 
 @app.post("/media/upload")
-async def upload(file: UploadFile):
+async def upload(file: UploadFile, request: Request):
+    require_api_key(request)
 
-    path = MEDIA_DIR / file.filename
+    filename = Path(file.filename or "upload.bin").name
+    if not filename or filename in {".", ".."}:
+        raise HTTPException(status_code=400, detail="Invalid filename")
 
+    target_name = f"{uuid4().hex}_{filename}"
+    path = MEDIA_DIR / target_name
+
+    total = 0
     with open(path, "wb") as f:
-        shutil.copyfileobj(file.file, f)
+        while True:
+            chunk = await file.read(1024 * 1024)
+            if not chunk:
+                break
 
-    return {"uploaded": file.filename}
+            total += len(chunk)
+            if total > MAX_UPLOAD_BYTES:
+                path.unlink(missing_ok=True)
+                raise HTTPException(status_code=413, detail="Upload too large")
+            f.write(chunk)
+
+    await file.close()
+
+    return {"uploaded": target_name, "original": filename, "size": total}
