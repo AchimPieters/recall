@@ -26,7 +26,12 @@ def create_access_token(
     return jwt.encode(payload, settings.jwt_secret, algorithm=settings.jwt_algorithm)
 
 
-def clamav_scan(file_bytes: bytes, host: str = "localhost", port: int = 3310) -> bool:
+def clamav_scan(
+    file_bytes: bytes,
+    host: str = "localhost",
+    port: int = 3310,
+    fail_open: bool = False,
+) -> bool:
     try:
         with socket.create_connection((host, port), timeout=1) as sock:
             sock.sendall(b"zINSTREAM\0")
@@ -36,4 +41,4 @@ def clamav_scan(file_bytes: bytes, host: str = "localhost", port: int = 3310) ->
             response = sock.recv(256).decode("utf-8", errors="ignore")
             return "OK" in response
     except OSError:
-        return True
+        return fail_open

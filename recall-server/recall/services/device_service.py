@@ -1,4 +1,4 @@
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from sqlalchemy.orm import Session
 from recall.core.config import get_settings
 from recall.models.device import Device, DeviceLog
@@ -10,6 +10,10 @@ class DeviceService:
     def __init__(self, db: Session):
         self.db = db
 
+    @staticmethod
+    def _utc_now() -> datetime:
+        return datetime.now(timezone.utc)
+
     def register(
         self, device_id: str, name: str, ip: str | None, version: str | None
     ) -> Device:
@@ -20,7 +24,7 @@ class DeviceService:
         device.status = "online"
         device.ip = ip
         device.version = version
-        device.last_seen = datetime.utcnow()
+        device.last_seen = self._utc_now()
         self.db.commit()
         self.db.refresh(device)
         return device
@@ -29,7 +33,7 @@ class DeviceService:
         device = self.db.query(Device).filter(Device.id == device_id).first()
         if not device:
             return None
-        device.last_seen = datetime.utcnow()
+        device.last_seen = self._utc_now()
         device.status = "online"
         device.metrics = metrics
         self.db.commit()
@@ -56,7 +60,7 @@ class DeviceService:
 
     def mark_presence(self) -> int:
         devices = self.db.query(Device).all()
-        now = datetime.utcnow()
+        now = self._utc_now()
         changed = 0
         for device in devices:
             if not device.last_seen:

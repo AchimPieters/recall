@@ -1,5 +1,7 @@
 import logging
 from pathlib import Path
+from contextlib import asynccontextmanager
+
 import structlog
 from fastapi import Depends, FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
@@ -22,20 +24,56 @@ from recall.models import User
 from recall.services.device_service import DeviceService
 
 settings_conf = get_settings()
-Base.metadata.create_all(bind=engine)
 
 logging.basicConfig(format="%(message)s", level=logging.INFO)
 structlog.configure(processors=[structlog.processors.JSONRenderer()])
 logger = structlog.get_logger(service="recall-api")
 
 limiter = Limiter(key_func=get_remote_address)
-app = FastAPI(title=settings_conf.app_name)
+
+
+def _bootstrap_admin() -> None:
+    db_gen = get_db()
+    db = next(db_gen)
+    try:
+        admin = (
+            db.query(User)
+            .filter(User.username == settings_conf.bootstrap_admin_username)
+            .first()
+        )
+        password = settings_conf.bootstrap_admin_password.strip()
+        if admin or not password:
+            return
+
+        db.add(
+            User(
+                username=settings_conf.bootstrap_admin_username,
+                password_hash=get_password_hash(password),
+                role="admin",
+            )
+        )
+        db.commit()
+        logger.info("bootstrap_admin", status="created")
+    finally:
+        db_gen.close()
+
+
+@asynccontextmanager
+async def lifespan(_: FastAPI):
+    if settings_conf.auto_create_schema:
+        Base.metadata.create_all(bind=engine)
+    _bootstrap_admin()
+    logger.info("startup", action="bootstrap", status="ok")
+    yield
+
+
+app = FastAPI(title=settings_conf.app_name, lifespan=lifespan)
 app.state.limiter = limiter
 app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=settings_conf.cors_origins,
     allow_methods=["*"],
     allow_headers=["*"],
 )
@@ -52,26 +90,6 @@ app.include_router(system.router)
 
 device_count = Gauge("device_count", "Total devices")
 device_online = Gauge("device_online", "Online devices")
-
-
-@app.on_event("startup")
-def bootstrap() -> None:
-    db_gen = get_db()
-    db = next(db_gen)
-    try:
-        admin = db.query(User).filter(User.username == "admin").first()
-        if not admin:
-            db.add(
-                User(
-                    username="admin",
-                    password_hash=get_password_hash("admin"),
-                    role="admin",
-                )
-            )
-            db.commit()
-    finally:
-        db_gen.close()
-    logger.info("startup", action="bootstrap", status="ok")
 
 
 @app.middleware("http")
