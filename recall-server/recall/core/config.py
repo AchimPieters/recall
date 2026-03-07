@@ -36,6 +36,9 @@ class Settings(BaseModel):
     bootstrap_admin_password: str = Field(
         default_factory=lambda: os.getenv("RECALL_BOOTSTRAP_ADMIN_PASSWORD", "")
     )
+    redis_url: str = Field(
+        default_factory=lambda: os.getenv("REDIS_URL", "redis://localhost:6379/0")
+    )
     clamav_host: str = Field(
         default_factory=lambda: os.getenv("CLAMAV_HOST", "localhost")
     )

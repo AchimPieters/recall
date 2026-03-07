@@ -71,5 +71,4 @@ def test_settings_reject_unknown_keys() -> None:
         headers={"Authorization": f"Bearer {token}"},
         json={"unknown_key": "value"},
     )
-    assert response.status_code == 400
-    assert "Unsupported setting keys" in response.json()["detail"]
+    assert response.status_code == 422

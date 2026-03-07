@@ -79,3 +79,23 @@ def test_groups_alerts_layouts_and_screenshots() -> None:
     resolved = client.post(f"/monitor/alerts/{alert_id}/resolve", headers=headers)
     assert resolved.status_code == 200
     assert resolved.json()["status"] == "resolved"
+
+
+def test_settings_schema_and_event_stream() -> None:
+    _ensure_admin()
+    token = create_access_token(subject="admin", role="admin")
+    headers = {"Authorization": f"Bearer {token}"}
+
+    bad = client.post("/settings", headers=headers, json={"unknown_key": "x"})
+    assert bad.status_code == 422
+
+    applied = client.post(
+        "/settings/apply?confirmed=true",
+        headers=headers,
+        json={"site_name": "Recall HQ", "timezone": "Europe/Amsterdam"},
+    )
+    assert applied.status_code == 200
+
+    events = client.get("/events", headers=headers)
+    assert events.status_code == 200
+    assert any(event["action"] == "settings_apply" for event in events.json())

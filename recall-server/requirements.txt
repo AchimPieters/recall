@@ -11,6 +11,7 @@ Pillow
 prometheus-client
 slowapi
 redis
+celery
 structlog
 
 pytest
