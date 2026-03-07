@@ -1,11 +1,46 @@
 
-<h2>System Monitor</h2>
-<pre id="stats"></pre>
-<script>
-async function load(){
-let r=await fetch("/monitor")
-let j=await r.json()
-document.getElementById("stats").innerText=JSON.stringify(j,null,2)
-}
-setInterval(load,2000)
-</script>
+
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Recall System Monitor</title>
+<link rel="stylesheet" href="style.css">
+</head>
+
+<body>
+
+<header class="topbar">
+    <div class="nav">
+      <a href="index.html" class="logo">
+          <img src="recall_logo_bw.svg" alt="Recall">
+      </a>
+
+        <nav>
+            <ul>
+                <li><a href="media.html">Upload Media</a></li>
+                <li><a href="devices.html">Devices</a></li>
+                <li><a href="monitor.html">System Monitor</a></li>
+            </ul>
+        </nav>
+    </div>
+</header>
+
+<main class="container">
+    <h1>Recall System Monitor</h1>
+
+    <script>
+    async function load(){
+    let r=await fetch("/monitor")
+    let j=await r.json()
+    document.getElementById("stats").innerText=JSON.stringify(j,null,2)
+    }
+    setInterval(load,2000)
+    </script>
+
+
+</main>
+
+</body>
+</html>

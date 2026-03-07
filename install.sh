@@ -9,7 +9,7 @@ echo "Installing Recall..."
 
 sudo apt update
 
-# detect chromium package
+# Detect chromium package name
 if apt-cache show chromium >/dev/null 2>&1; then
     BROWSER="chromium"
 else

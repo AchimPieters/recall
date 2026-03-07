@@ -1,6 +1,38 @@
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Recall Upload Media</title>
+<link rel="stylesheet" href="style.css">
+</head>
 
-<h2>Upload Media</h2>
-<form action="/media/upload" method="post" enctype="multipart/form-data">
-<input type="file" name="file">
-<button>Upload</button>
-</form>
+<body>
+
+<header class="topbar">
+    <div class="nav">
+      <a href="index.html" class="logo">
+          <img src="recall_logo_bw.svg" alt="Recall">
+      </a>
+
+        <nav>
+            <ul>
+                <li><a href="media.html">Upload Media</a></li>
+                <li><a href="devices.html">Devices</a></li>
+                <li><a href="monitor.html">System Monitor</a></li>
+            </ul>
+        </nav>
+    </div>
+</header>
+
+<main class="container">
+    <h1>Recall Upload Media</h1>
+
+    <form action="/media/upload" method="post" enctype="multipart/form-data">
+    <input type="file" name="file">
+    <button>Upload</button>
+    </form>
+
+</main>
+
+</body>
+</html>
