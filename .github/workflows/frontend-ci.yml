@@ -1,0 +1,15 @@
+name: Frontend CI (placeholder)
+
+on:
+  pull_request:
+    paths:
+      - 'frontend/**'
+      - '.github/workflows/frontend-ci.yml'
+
+jobs:
+  frontend:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Frontend not yet migrated
+        run: echo "Frontend v2 directory will be validated once React/TypeScript app exists."

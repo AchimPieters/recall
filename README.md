@@ -1,25 +1,47 @@
 # Recall
 
-Production-oriented digital signage platform.
+Recall is a production-oriented digital signage platform with an enterprise migration path toward a modular, secure, multi-tenant architecture.
 
-## Components
-- `recall-server/recall/api`: FastAPI application and route layer.
-- `recall-server/recall/services`: business logic.
-- `recall-server/recall/models`: SQLAlchemy ORM models.
-- `recall-server/recall/db`: database configuration and migrations.
-- `recall-server/recall/workers`: background tasks.
+## Architecture at a glance
+- **API/backend**: FastAPI + service/repository layering.
+- **Persistence**: PostgreSQL + SQLAlchemy + migrations.
+- **Async workloads**: Celery + Redis.
+- **Device layer**: agent heartbeat, playback, metrics and remote operations.
+- **Observability**: Prometheus/Grafana/Loki target stack.
 
-## Quick start
+See the detailed architecture blueprint in [`docs/architecture.md`](docs/architecture.md).
+
+## Repository overview (current + target)
+- `recall-server/`: current backend/runtime.
+- `recall-player/`: current agent runtime.
+- `docs/`: architecture, API, security, deployment and runbooks.
+- `docs/recall-v2-enterprise-structure.md`: target v2 directory architecture.
+- `docs/engineer-implementation-checklist.md`: phase-based engineer checklist.
+
+## Development quick start
 ```bash
-pip install -r recall-server/requirements.txt
+python -m pip install -r recall-server/requirements.txt
 cd recall-server
 uvicorn recall.api.main:app --host 0.0.0.0 --port 8000
 ```
 
-## Docker
+## Testing and quality
+From `recall-server/`:
 ```bash
-./install-docker.sh
+ruff check recall tests
+black --check recall tests
+mypy --ignore-missing-imports recall
+bandit -q -r recall -lll
+pytest -q
 ```
 
-## Documentation
-See `docs/` for architecture, API, protocol, deployment, and development docs.
+## Deployment
+- Local/container install helpers: `install-docker.sh`, `install-pi.sh`, `install-x86.sh`.
+- See [`docs/deployment.md`](docs/deployment.md) for deployment guidance.
+
+## Security
+- Responsible disclosure policy: [`SECURITY.md`](SECURITY.md).
+- Security architecture and controls: [`docs/security.md`](docs/security.md).
+
+## Product screenshot
+![Recall monitor UI](recall-server/web/Recall_Monitor.png)

@@ -1,0 +1,20 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v*.*.*'
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Prepare release artifact
+        run: |
+          tar -czf recall-${GITHUB_REF_NAME}.tar.gz .
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: recall-${{ github.ref_name }}
+          path: recall-${{ github.ref_name }}.tar.gz
