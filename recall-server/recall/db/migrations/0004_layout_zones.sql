@@ -1,0 +1,12 @@
+CREATE TABLE IF NOT EXISTS zones (
+    id INTEGER PRIMARY KEY,
+    layout_id INTEGER NOT NULL,
+    name VARCHAR(255) NOT NULL,
+    x INTEGER NOT NULL DEFAULT 0,
+    y INTEGER NOT NULL DEFAULT 0,
+    width INTEGER NOT NULL DEFAULT 1920,
+    height INTEGER NOT NULL DEFAULT 1080,
+    FOREIGN KEY(layout_id) REFERENCES layouts(id)
+);
+
+CREATE INDEX IF NOT EXISTS idx_zones_layout_id ON zones(layout_id);

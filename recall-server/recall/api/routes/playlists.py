@@ -94,14 +94,15 @@ def schedule_playlist(
     payload: SchedulePayload,
     db: Session = Depends(get_db),
 ):
-    if payload.ends_at and payload.starts_at and payload.ends_at <= payload.starts_at:
-        raise HTTPException(status_code=400, detail="ends_at must be after starts_at")
-    schedule = PlaylistService(db).schedule_playlist(
-        playlist_id=playlist_id,
-        target=payload.target,
-        starts_at=payload.starts_at,
-        ends_at=payload.ends_at,
-    )
+    try:
+        schedule = PlaylistService(db).schedule_playlist(
+            playlist_id=playlist_id,
+            target=payload.target,
+            starts_at=payload.starts_at,
+            ends_at=payload.ends_at,
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
     return {
         "id": schedule.id,
         "playlist_id": schedule.playlist_id,

@@ -1,4 +1,5 @@
 from datetime import datetime, timezone
+from sqlalchemy import or_
 from sqlalchemy.orm import Session
 
 from recall.models.media import Layout, Playlist, PlaylistItem, Schedule
@@ -71,6 +72,7 @@ class PlaylistService:
         starts_at: datetime | None,
         ends_at: datetime | None,
     ) -> Schedule:
+        starts_at, ends_at = self._validate_schedule_window(target, starts_at, ends_at)
         schedule = Schedule(
             playlist_id=playlist_id,
             target=target,
@@ -81,6 +83,35 @@ class PlaylistService:
         self.db.commit()
         self.db.refresh(schedule)
         return schedule
+
+    def _validate_schedule_window(
+        self,
+        target: str,
+        starts_at: datetime | None,
+        ends_at: datetime | None,
+    ) -> tuple[datetime | None, datetime | None]:
+        starts_at = self._normalize(starts_at)
+        ends_at = self._normalize(ends_at)
+
+        if starts_at and ends_at and ends_at <= starts_at:
+            raise ValueError("ends_at must be after starts_at")
+
+        overlap_query = self.db.query(Schedule).filter(Schedule.target == target)
+        if starts_at is not None:
+            overlap_query = overlap_query.filter(
+                or_(Schedule.ends_at.is_(None), Schedule.ends_at > starts_at)
+            )
+        if ends_at is not None:
+            overlap_query = overlap_query.filter(
+                or_(Schedule.starts_at.is_(None), Schedule.starts_at < ends_at)
+            )
+
+        if overlap_query.first():
+            raise ValueError(
+                "schedule overlaps with an existing window for this target"
+            )
+
+        return starts_at, ends_at
 
     def create_layout(self, name: str, definition_json: str) -> Layout:
         layout = Layout(name=name, definition_json=definition_json)

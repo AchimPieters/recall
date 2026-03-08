@@ -193,7 +193,7 @@ class DeviceService:
         target_version: str | None = None,
         playlist_id: int | None = None,
     ) -> dict:
-        valid_actions = {"reboot", "update", "playlist_assign"}
+        valid_actions = {"reboot", "update", "playlist_assign", "rollback"}
         if action not in valid_actions:
             raise ValueError("unsupported action")
 
@@ -203,6 +203,9 @@ class DeviceService:
 
         members = self.list_group_members(group_id)
         device_ids = [m.device_id for m in members]
+
+        if action in {"update", "rollback"} and not target_version:
+            raise ValueError("target_version is required for update/rollback")
 
         details: dict[str, str | int | None] = {"group_id": group_id, "action": action}
         if target_version:

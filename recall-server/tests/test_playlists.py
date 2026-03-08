@@ -73,3 +73,39 @@ def test_schedule_rejects_invalid_window() -> None:
         },
     )
     assert response.status_code == 400
+
+
+def test_schedule_rejects_overlap_for_same_target() -> None:
+    _ensure_admin()
+    token = create_access_token(subject="admin", role="admin")
+    headers = {"Authorization": f"Bearer {token}"}
+
+    created_one = client.post("/playlists", headers=headers, json={"name": "Morning"})
+    created_two = client.post("/playlists", headers=headers, json={"name": "Afternoon"})
+    playlist_one = created_one.json()["id"]
+    playlist_two = created_two.json()["id"]
+
+    now = datetime.now(timezone.utc)
+
+    first = client.post(
+        f"/playlists/{playlist_one}/schedule",
+        headers=headers,
+        json={
+            "target": "store-1",
+            "starts_at": now.isoformat(),
+            "ends_at": (now + timedelta(hours=2)).isoformat(),
+        },
+    )
+    assert first.status_code == 200
+
+    overlap = client.post(
+        f"/playlists/{playlist_two}/schedule",
+        headers=headers,
+        json={
+            "target": "store-1",
+            "starts_at": (now + timedelta(minutes=30)).isoformat(),
+            "ends_at": (now + timedelta(hours=3)).isoformat(),
+        },
+    )
+    assert overlap.status_code == 400
+    assert "overlaps" in overlap.json()["detail"]

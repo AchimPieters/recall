@@ -1,7 +1,7 @@
 from fastapi.testclient import TestClient
 
 from recall.api.main import app
-from recall.core.security import create_access_token, get_password_hash
+from recall.core.security import create_access_token, get_password_hash, verify_password
 from recall.db.database import Base, SessionLocal, engine
 from recall.models.settings import User
 
@@ -180,3 +180,75 @@ def test_stale_device_status_without_heartbeat() -> None:
     assert listed.status_code == 200
     target = [d for d in listed.json() if d["id"] == "dev-stale"][0]
     assert target["status"] == "stale"
+
+
+def test_password_hash_uses_argon2() -> None:
+    hashed = get_password_hash("s3cret")
+    assert hashed.startswith("$argon2")
+    assert verify_password("s3cret", hashed)
+
+
+def test_zone_table_registered_in_metadata() -> None:
+    Base.metadata.create_all(bind=engine)
+    assert "zones" in Base.metadata.tables
+
+
+def test_device_group_rollback_requires_target_version() -> None:
+    _ensure_admin()
+    token = create_access_token(subject="admin", role="admin")
+    headers = {"Authorization": f"Bearer {token}"}
+
+    client.post(
+        "/device/register", headers=headers, json={"id": "dev-roll-1", "name": "Store"}
+    )
+    group = client.post(
+        "/device/groups", headers=headers, json={"name": "Rollback Ops"}
+    )
+    group_id = group.json()["id"]
+    client.post(
+        f"/device/groups/{group_id}/members",
+        headers=headers,
+        json={"device_id": "dev-roll-1"},
+    )
+
+    missing = client.post(
+        f"/device/groups/{group_id}/bulk",
+        headers=headers,
+        json={"action": "rollback"},
+    )
+    assert missing.status_code == 400
+    assert "target_version" in missing.json()["detail"]
+
+
+def test_device_group_rollback_logs_event() -> None:
+    _ensure_admin()
+    token = create_access_token(subject="admin", role="admin")
+    headers = {"Authorization": f"Bearer {token}"}
+
+    client.post(
+        "/device/register", headers=headers, json={"id": "dev-roll-2", "name": "Hall"}
+    )
+    group = client.post(
+        "/device/groups", headers=headers, json={"name": "Rollback Ops 2"}
+    )
+    group_id = group.json()["id"]
+    client.post(
+        f"/device/groups/{group_id}/members",
+        headers=headers,
+        json={"device_id": "dev-roll-2"},
+    )
+
+    rollback = client.post(
+        f"/device/groups/{group_id}/bulk",
+        headers=headers,
+        json={"action": "rollback", "target_version": "2.0.0"},
+    )
+    assert rollback.status_code == 200
+    body = rollback.json()
+    assert body["action"] == "rollback"
+    assert body["target_version"] == "2.0.0"
+
+    events = client.get("/events?limit=20", headers=headers)
+    assert events.status_code == 200
+    actions = [e["action"] for e in events.json()]
+    assert "bulk_rollback" in actions

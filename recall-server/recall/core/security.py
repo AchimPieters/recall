@@ -8,7 +8,7 @@ from passlib.context import CryptContext
 
 from recall.core.config import get_settings
 
-pwd_context = CryptContext(schemes=["pbkdf2_sha256", "bcrypt"], deprecated="auto")
+pwd_context = CryptContext(schemes=["argon2"], deprecated="auto")
 settings = get_settings()
 
 

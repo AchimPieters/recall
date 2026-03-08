@@ -46,7 +46,7 @@ class ScreenshotPayload(BaseModel):
 
 
 class BulkGroupActionPayload(BaseModel):
-    action: str = Field(pattern="^(reboot|update|playlist_assign)$")
+    action: str = Field(pattern="^(reboot|update|playlist_assign|rollback)$")
     target_version: str | None = Field(default=None, max_length=64)
     playlist_id: int | None = Field(default=None, ge=1)
 
@@ -233,14 +233,17 @@ def group_bulk_action(
         raise HTTPException(status_code=404, detail="group not found")
     ensure_organization_access(user, group.organization_id)
 
-    result = svc.execute_group_action(
-        group_id=group_id,
-        action=payload.action,
-        actor=user.username,
-        organization_id=user.organization_id,
-        target_version=payload.target_version,
-        playlist_id=payload.playlist_id,
-    )
+    try:
+        result = svc.execute_group_action(
+            group_id=group_id,
+            action=payload.action,
+            actor=user.username,
+            organization_id=user.organization_id,
+            target_version=payload.target_version,
+            playlist_id=payload.playlist_id,
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
     return result
 
 
