@@ -1,6 +1,7 @@
 from fastapi.testclient import TestClient
 
 from recall.api.main import app, failed_login_attempts
+from recall.core.config import get_settings
 from recall.core.security import create_access_token, get_password_hash
 from recall.db.database import Base, SessionLocal, engine
 from recall.models.settings import User
@@ -94,8 +95,9 @@ def test_version_endpoint() -> None:
 def test_account_lockout_after_failed_logins() -> None:
     _reset_login_state()
     _ensure_admin()
+    settings = get_settings()
 
-    for _ in range(5):
+    for _ in range(settings.auth_lockout_threshold):
         failed = client.post(
             "/token",
             data={"username": "admin", "password": "wrong"},

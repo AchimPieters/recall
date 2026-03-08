@@ -50,8 +50,14 @@ class Settings(BaseModel):
         default_factory=lambda: os.getenv("RECALL_CLAMAV_FAIL_OPEN", "false").lower()
         == "true"
     )
-    auth_lockout_threshold: int = int(os.getenv("RECALL_AUTH_LOCKOUT_THRESHOLD", "5"))
-    auth_lockout_minutes: int = int(os.getenv("RECALL_AUTH_LOCKOUT_MINUTES", "15"))
+    auth_lockout_threshold: int = Field(
+        default_factory=lambda: int(os.getenv("RECALL_AUTH_LOCKOUT_THRESHOLD", "5")),
+        ge=1,
+    )
+    auth_lockout_minutes: int = Field(
+        default_factory=lambda: int(os.getenv("RECALL_AUTH_LOCKOUT_MINUTES", "15")),
+        ge=1,
+    )
 
 
 @lru_cache
