@@ -1,6 +1,9 @@
 # Changelog
 
 ## Unreleased
+- Added account lockout controls for repeated failed logins and configurable lockout settings.
+- Added `/version` endpoint for runtime version/environment introspection.
+- Added audit gap closure document and tests for lockout/version behavior.
 - Added playlist and scheduling API endpoints plus device config playlist resolution.
 - Added audit remediation document that maps architecture/security/ops/maintainability/product points to implementation.
 - Added tests for playlist scheduling and config resolution.
