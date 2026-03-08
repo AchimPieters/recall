@@ -12,6 +12,7 @@ Container targets:
 - recall-worker
 - recall-postgres
 - recall-redis
+- recall-frontend
 
 ## TLS and secret management
 - Set `RECALL_ENFORCE_HTTPS=true` in production and terminate TLS at ingress/load balancer.
@@ -22,3 +23,9 @@ Container targets:
 - `recall-player/agent.py` defaults to `https://localhost:8000` and TLS verification enabled.
 - Prefer `RECALL_ACCESS_TOKEN` for agent authentication.
 - API-key-only mode is intentionally opt-in (`RECALL_AGENT_ALLOW_API_KEY=true`) for legacy setups.
+
+
+## Kubernetes
+- `k8s/api-deployment.yaml`
+- `k8s/worker-deployment.yaml`
+- `k8s/frontend-deployment.yaml`

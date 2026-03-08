@@ -44,3 +44,13 @@ services:
       - postgres
       - redis
     command: ["celery", "-A", "recall.workers.celery_app:celery_app", "worker", "--loglevel=info"]
+
+
+  recall-frontend:
+    build:
+      context: ..
+      dockerfile: docker/frontend.Dockerfile
+    ports:
+      - "5173:80"
+    depends_on:
+      - recall-api

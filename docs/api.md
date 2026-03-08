@@ -2,6 +2,9 @@
 
 ## Auth
 - `POST /token`
+- `POST /auth/login`
+- `POST /token/refresh`
+- `POST /auth/refresh`
 
 ## System health & ops
 - `GET /health`
@@ -44,3 +47,7 @@
 ## System actions
 - `POST /system/reboot`
 - `POST /system/update`
+
+
+## Audit
+- `GET /audit-logs`

@@ -33,7 +33,7 @@ from recall.api.routes import (
     system,
 )
 from recall.core.config import get_settings
-from recall.core.auth import AuthUser, get_current_user
+from recall.core.auth import AuthUser, get_current_user, require_role
 from recall.core.security import (
     create_access_token,
     create_refresh_token,
@@ -244,6 +244,7 @@ def ready(db: Session = Depends(get_db)):
 
 
 @app.post("/token")
+@app.post("/auth/login")
 @limiter.limit("10/minute")
 def login(
     request: Request,
@@ -293,6 +294,7 @@ def login(
 
 
 @app.post("/token/refresh")
+@app.post("/auth/refresh")
 def refresh_token(
     payload: RefreshPayload,
     request: Request,
@@ -350,6 +352,29 @@ def refresh_token(
         "refresh_token": new_refresh,
         "token_type": "Bearer",
     }
+
+
+@app.get("/audit-logs", dependencies=[Depends(require_role("admin"))])
+def audit_logs(
+    limit: int = 100,
+    actor: str | None = None,
+    event_type: str | None = None,
+    db: Session = Depends(get_db),
+):
+    rows = SecurityRepository(db).list_security_events(
+        limit=max(1, min(limit, 500)), actor=actor, event_type=event_type
+    )
+    return [
+        {
+            "id": row.id,
+            "actor": row.actor,
+            "event_type": row.event_type,
+            "detail": row.detail,
+            "ip_address": row.ip_address,
+            "created_at": row.created_at,
+        }
+        for row in rows
+    ]
 
 
 @app.get("/devices")
