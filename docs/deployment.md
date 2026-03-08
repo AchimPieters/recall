@@ -12,3 +12,8 @@ Container targets:
 - recall-worker (planned)
 - recall-web (planned)
 - recall-agent (planned)
+
+## TLS and secret management
+- Set `RECALL_ENFORCE_HTTPS=true` in production and terminate TLS at ingress/load balancer.
+- Configure `JWT_SECRETS` as a comma-separated key-ring to support rotation; first value is used for signing.
+- Keep `JWT_SECRET`/`JWT_SECRETS` in a secret manager, never in git.

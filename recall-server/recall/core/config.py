@@ -12,6 +12,18 @@ class Settings(BaseModel):
     jwt_secret: str = Field(default_factory=lambda: os.getenv("JWT_SECRET", ""))
     jwt_algorithm: str = "HS256"
     access_token_expire_minutes: int = 60
+    refresh_token_expire_minutes: int = 60 * 24 * 14
+    jwt_secrets: list[str] = Field(
+        default_factory=lambda: [
+            secret.strip()
+            for secret in os.getenv("JWT_SECRETS", "").split(",")
+            if secret.strip()
+        ]
+    )
+    enforce_https: bool = Field(
+        default_factory=lambda: os.getenv("RECALL_ENFORCE_HTTPS", "false").lower()
+        == "true"
+    )
     app_version: str = Field(
         default_factory=lambda: os.getenv("RECALL_VERSION", "0.2.0")
     )
@@ -63,6 +75,9 @@ class Settings(BaseModel):
 @lru_cache
 def get_settings() -> Settings:
     settings = Settings()
+    if settings.jwt_secrets:
+        settings.jwt_secret = settings.jwt_secrets[0]
+
     if not settings.jwt_secret:
         if settings.environment == "dev":
             settings.jwt_secret = "dev-insecure-secret-change-me"

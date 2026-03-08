@@ -1,7 +1,7 @@
 from fastapi import APIRouter, Depends, HTTPException, Request
 from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
-from recall.core.auth import require_role
+from recall.core.auth import require_permission, require_role
 from recall.db.database import get_db
 from recall.services.device_service import DeviceService
 
@@ -82,7 +82,7 @@ def post_logs(payload: LogPayload, db: Session = Depends(get_db)):
 
 
 @router.get(
-    "/logs", dependencies=[Depends(require_role("admin", "operator", "viewer"))]
+    "/logs", dependencies=[Depends(require_permission("devices:read"))]
 )
 def list_logs(limit: int = 100, db: Session = Depends(get_db)):
     logs = DeviceService(db).list_logs(limit=limit)
@@ -108,7 +108,7 @@ def post_screenshot(payload: ScreenshotPayload, db: Session = Depends(get_db)):
 
 
 @router.get(
-    "/screenshots", dependencies=[Depends(require_role("admin", "operator", "viewer"))]
+    "/screenshots", dependencies=[Depends(require_permission("devices:read"))]
 )
 def get_screenshots(device_id: str | None = None, db: Session = Depends(get_db)):
     return [
@@ -133,7 +133,7 @@ def post_metrics(payload: HeartbeatPayload, db: Session = Depends(get_db)):
 
 
 @router.get(
-    "/list", dependencies=[Depends(require_role("admin", "operator", "viewer"))]
+    "/list", dependencies=[Depends(require_permission("devices:read"))]
 )
 def list_devices(db: Session = Depends(get_db)):
     svc = DeviceService(db)
@@ -141,14 +141,14 @@ def list_devices(db: Session = Depends(get_db)):
     return svc.list_devices()
 
 
-@router.post("/groups", dependencies=[Depends(require_role("admin", "operator"))])
+@router.post("/groups", dependencies=[Depends(require_permission("devices:write"))])
 def create_group(payload: GroupPayload, db: Session = Depends(get_db)):
     group = DeviceService(db).create_group(payload.name)
     return {"id": group.id, "name": group.name}
 
 
 @router.get(
-    "/groups", dependencies=[Depends(require_role("admin", "operator", "viewer"))]
+    "/groups", dependencies=[Depends(require_permission("devices:read"))]
 )
 def list_groups(db: Session = Depends(get_db)):
     return [{"id": g.id, "name": g.name} for g in DeviceService(db).list_groups()]
@@ -156,7 +156,7 @@ def list_groups(db: Session = Depends(get_db)):
 
 @router.post(
     "/groups/{group_id}/members",
-    dependencies=[Depends(require_role("admin", "operator"))],
+    dependencies=[Depends(require_permission("devices:write"))],
 )
 def add_group_member(
     group_id: int, payload: GroupMemberPayload, db: Session = Depends(get_db)

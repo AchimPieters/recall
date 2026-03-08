@@ -5,20 +5,30 @@ import time
 
 import requests
 
-SERVER = "http://localhost:8000"
+SERVER = os.getenv("RECALL_SERVER_URL", "https://localhost:8000")
 DEVICE_ID = socket.gethostname()
 API_KEY = os.getenv("RECALL_API_KEY")
+ACCESS_TOKEN = os.getenv("RECALL_ACCESS_TOKEN")
+VERIFY_TLS = os.getenv("RECALL_VERIFY_TLS", "true").lower() == "true"
 
 session = requests.Session()
 
 
+def _auth_headers() -> dict[str, str] | None:
+    if ACCESS_TOKEN:
+        return {"Authorization": f"Bearer {ACCESS_TOKEN}"}
+    if API_KEY:
+        return {"x-api-key": API_KEY}
+    return None
+
+
 def register_device() -> bool:
-    headers = {"x-api-key": API_KEY} if API_KEY else None
     response = session.post(
         f"{SERVER}/device/register",
-        json={"id": DEVICE_ID, "status": "online"},
-        headers=headers,
+        json={"id": DEVICE_ID, "name": DEVICE_ID},
+        headers=_auth_headers(),
         timeout=(3, 5),
+        verify=VERIFY_TLS,
     )
     response.raise_for_status()
     return True
