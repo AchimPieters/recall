@@ -1,10 +1,10 @@
 import logging
 import time
+from contextlib import asynccontextmanager
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
-from contextlib import asynccontextmanager
-from uuid import uuid4
 from threading import Lock
+from uuid import uuid4
 
 import structlog
 from fastapi import Depends, FastAPI, HTTPException, Request
@@ -13,6 +13,7 @@ from fastapi.responses import PlainTextResponse
 from fastapi.security import OAuth2PasswordRequestForm
 from fastapi.staticfiles import StaticFiles
 from prometheus_client import CONTENT_TYPE_LATEST, Gauge, Histogram, generate_latest
+from pydantic import BaseModel
 from slowapi import Limiter
 from slowapi.errors import RateLimitExceeded
 from slowapi.extension import _rate_limit_exceeded_handler
@@ -30,9 +31,17 @@ from recall.api.routes import (
     system,
 )
 from recall.core.config import get_settings
-from recall.core.security import create_access_token, get_password_hash, verify_password
+from recall.core.security import (
+    create_access_token,
+    create_refresh_token,
+    get_password_hash,
+    hash_token,
+    parse_refresh_token,
+    verify_password,
+)
 from recall.db.database import Base, engine, get_db
 from recall.models import User
+from recall.repositories.security_repository import SecurityRepository
 from recall.services.device_service import DeviceService
 
 settings_conf = get_settings()
@@ -45,6 +54,10 @@ limiter = Limiter(key_func=get_remote_address)
 
 failed_login_attempts: dict[str, list[datetime]] = {}
 failed_login_lock = Lock()
+
+
+class RefreshPayload(BaseModel):
+    refresh_token: str
 
 
 def _prune_failed_attempts(username: str, now: datetime) -> list[datetime]:
@@ -126,13 +139,14 @@ WEB_DIR = Path(__file__).resolve().parents[2] / "web"
 if WEB_DIR.exists():
     app.mount("/web", StaticFiles(directory=str(WEB_DIR), html=True), name="web")
 
-app.include_router(devices.router)
-app.include_router(media.router)
-app.include_router(events.router)
-app.include_router(monitor.router)
-app.include_router(settings.router)
-app.include_router(playlists.router)
-app.include_router(system.router)
+for prefix in ("", "/api/v1"):
+    app.include_router(devices.router, prefix=prefix)
+    app.include_router(media.router, prefix=prefix)
+    app.include_router(events.router, prefix=prefix)
+    app.include_router(monitor.router, prefix=prefix)
+    app.include_router(settings.router, prefix=prefix)
+    app.include_router(playlists.router, prefix=prefix)
+    app.include_router(system.router, prefix=prefix)
 
 device_count = Gauge("device_count", "Total devices")
 device_online = Gauge("device_online", "Online devices")
@@ -144,6 +158,11 @@ request_latency = Histogram(
 @app.middleware("http")
 async def request_logger(request: Request, call_next):
     request_id = request.headers.get("X-Request-ID", uuid4().hex)
+    if settings_conf.enforce_https and settings_conf.environment != "dev":
+        forwarded_proto = request.headers.get("X-Forwarded-Proto", "http")
+        if forwarded_proto != "https" and request.url.scheme != "https":
+            return PlainTextResponse("HTTPS required", status_code=426)
+
     start = time.perf_counter()
     response = await call_next(request)
     elapsed = time.perf_counter() - start
@@ -187,6 +206,7 @@ def version():
     return {
         "version": settings_conf.app_version,
         "environment": settings_conf.environment,
+        "api_versions": ["v1"],
     }
 
 
@@ -205,18 +225,79 @@ def login(
 ):
     now = datetime.now(timezone.utc)
     username = form_data.username.strip()
+    sec_repo = SecurityRepository(db)
 
     if _is_locked_out(username, now):
+        sec_repo.add_security_event(
+            actor=username,
+            event_type="login_locked",
+            detail="Account temporarily locked",
+            ip_address=request.client.host if request.client else None,
+        )
         raise HTTPException(status_code=429, detail="Account temporarily locked")
 
     user = db.query(User).filter(User.username == username).first()
     if not user or not verify_password(form_data.password, user.password_hash):
         _record_failed_login(username, now)
+        sec_repo.add_security_event(
+            actor=username,
+            event_type="login_failed",
+            detail="Invalid credentials",
+            ip_address=request.client.host if request.client else None,
+        )
         raise HTTPException(status_code=401, detail="Invalid credentials")
 
     _clear_failed_logins(username)
     token = create_access_token(subject=user.username, role=user.role)
-    return {"access_token": token, "token_type": "Bearer"}
+    refresh_token, jti = create_refresh_token(subject=user.username)
+    refresh_exp = now + timedelta(minutes=settings_conf.refresh_token_expire_minutes)
+    sec_repo.create_refresh_token(user.username, hash_token(jti), refresh_exp)
+    sec_repo.add_security_event(
+        actor=username,
+        event_type="login_success",
+        detail="Access and refresh token issued",
+        ip_address=request.client.host if request.client else None,
+    )
+    return {
+        "access_token": token,
+        "refresh_token": refresh_token,
+        "token_type": "Bearer",
+    }
+
+
+@app.post("/token/refresh")
+def refresh_token(payload: RefreshPayload, db: Session = Depends(get_db)):
+    sec_repo = SecurityRepository(db)
+    try:
+        subject, jti = parse_refresh_token(payload.refresh_token)
+    except Exception as exc:  # noqa: BLE001
+        raise HTTPException(status_code=401, detail="Invalid refresh token") from exc
+
+    token_record = sec_repo.get_active_refresh_token(hash_token(jti))
+    if not token_record or token_record.expires_at < datetime.utcnow():
+        raise HTTPException(status_code=401, detail="Refresh token expired or revoked")
+
+    user = db.query(User).filter(User.username == subject).first()
+    if not user:
+        raise HTTPException(status_code=401, detail="Unknown user")
+
+    sec_repo.revoke_refresh_token(hash_token(jti))
+    new_refresh, new_jti = create_refresh_token(subject=user.username)
+    new_expiry = datetime.now(timezone.utc) + timedelta(
+        minutes=settings_conf.refresh_token_expire_minutes
+    )
+    sec_repo.create_refresh_token(user.username, hash_token(new_jti), new_expiry)
+    sec_repo.add_security_event(
+        actor=user.username,
+        event_type="token_refresh",
+        detail="Refresh token rotated",
+        ip_address=None,
+    )
+    return {
+        "access_token": create_access_token(subject=user.username, role=user.role),
+        "refresh_token": new_refresh,
+        "token_type": "Bearer",
+    }
 
 
 @app.get("/devices")

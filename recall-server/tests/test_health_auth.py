@@ -111,3 +111,51 @@ def test_account_lockout_after_failed_logins() -> None:
         headers={"content-type": "application/x-www-form-urlencoded"},
     )
     assert locked.status_code == 429
+
+
+def test_refresh_token_flow_rotates_token() -> None:
+    _reset_login_state()
+    _ensure_admin()
+    response = client.post(
+        "/token",
+        data={"username": "admin", "password": "admin"},
+        headers={"content-type": "application/x-www-form-urlencoded"},
+    )
+    assert response.status_code == 200
+    payload = response.json()
+    assert "refresh_token" in payload
+
+    refreshed = client.post("/token/refresh", json={"refresh_token": payload["refresh_token"]})
+    assert refreshed.status_code == 200
+    refreshed_json = refreshed.json()
+    assert refreshed_json["access_token"]
+    assert refreshed_json["refresh_token"] != payload["refresh_token"]
+
+
+def test_permission_enforcement_blocks_viewer_write() -> None:
+    _reset_login_state()
+    _ensure_admin()
+    db = SessionLocal()
+    try:
+        viewer = db.query(User).filter(User.username == "viewer").first()
+        if not viewer:
+            viewer = User(
+                username="viewer",
+                password_hash=get_password_hash("viewer"),
+                role="viewer",
+            )
+            db.add(viewer)
+        else:
+            viewer.password_hash = get_password_hash("viewer")
+            viewer.role = "viewer"
+        db.commit()
+    finally:
+        db.close()
+
+    token = create_access_token(subject="viewer", role="viewer")
+    blocked = client.post(
+        "/media/upload",
+        headers={"Authorization": f"Bearer {token}"},
+        files={"file": ("x.txt", b"data", "text/plain")},
+    )
+    assert blocked.status_code == 403

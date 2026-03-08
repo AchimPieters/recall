@@ -1,7 +1,11 @@
 from datetime import datetime, timedelta, timezone
+import hashlib
 import socket
-from passlib.context import CryptContext
+import uuid
+
 from jose import jwt
+from passlib.context import CryptContext
+
 from recall.core.config import get_settings
 
 pwd_context = CryptContext(schemes=["pbkdf2_sha256", "bcrypt"], deprecated="auto")
@@ -22,8 +26,33 @@ def create_access_token(
     expire = datetime.now(timezone.utc) + (
         expires_delta or timedelta(minutes=settings.access_token_expire_minutes)
     )
-    payload = {"sub": subject, "role": role, "exp": expire}
+    payload = {"sub": subject, "role": role, "exp": expire, "type": "access"}
     return jwt.encode(payload, settings.jwt_secret, algorithm=settings.jwt_algorithm)
+
+
+def create_refresh_token(subject: str, expires_delta: timedelta | None = None) -> tuple[str, str]:
+    expire = datetime.now(timezone.utc) + (
+        expires_delta or timedelta(minutes=settings.refresh_token_expire_minutes)
+    )
+    jti = uuid.uuid4().hex
+    payload = {"sub": subject, "exp": expire, "type": "refresh", "jti": jti}
+    token = jwt.encode(payload, settings.jwt_secret, algorithm=settings.jwt_algorithm)
+    return token, jti
+
+
+def parse_refresh_token(token: str) -> tuple[str, str]:
+    payload = jwt.decode(token, settings.jwt_secret, algorithms=[settings.jwt_algorithm])
+    if payload.get("type") != "refresh":
+        raise ValueError("Invalid token type")
+    subject = payload.get("sub")
+    jti = payload.get("jti")
+    if not subject or not jti:
+        raise ValueError("Malformed refresh token")
+    return str(subject), str(jti)
+
+
+def hash_token(value: str) -> str:
+    return hashlib.sha256(value.encode("utf-8")).hexdigest()
 
 
 def clamav_scan(

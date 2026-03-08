@@ -1,6 +1,7 @@
 from fastapi import APIRouter, Depends, File, HTTPException, UploadFile
 from sqlalchemy.orm import Session
-from recall.core.auth import require_role
+
+from recall.core.auth import require_permission
 from recall.core.config import get_settings
 from recall.core.security import clamav_scan
 from recall.db.database import get_db
@@ -10,7 +11,7 @@ router = APIRouter(prefix="/media", tags=["media"])
 settings = get_settings()
 
 
-@router.post("/upload", dependencies=[Depends(require_role("admin", "operator"))])
+@router.post("/upload", dependencies=[Depends(require_permission("media:write"))])
 async def upload(file: UploadFile = File(...), db: Session = Depends(get_db)):
     data = await file.read()
     mime = file.content_type or "application/octet-stream"

@@ -4,7 +4,7 @@ from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
 
-from recall.core.auth import require_role
+from recall.core.auth import require_permission
 from recall.db.database import get_db
 from recall.services.playlist_service import PlaylistService
 
@@ -32,20 +32,20 @@ class LayoutPayload(BaseModel):
     definition_json: str = Field(min_length=2, max_length=16384)
 
 
-@router.post("", dependencies=[Depends(require_role("admin", "operator"))])
+@router.post("", dependencies=[Depends(require_permission("playlists:write"))])
 def create_playlist(payload: PlaylistCreatePayload, db: Session = Depends(get_db)):
     playlist = PlaylistService(db).create_playlist(payload.name)
     return {"id": playlist.id, "name": playlist.name}
 
 
-@router.get("", dependencies=[Depends(require_role("admin", "operator", "viewer"))])
+@router.get("", dependencies=[Depends(require_permission("playlists:read"))])
 def list_playlists(db: Session = Depends(get_db)):
     playlists = PlaylistService(db).list_playlists()
     return [{"id": p.id, "name": p.name} for p in playlists]
 
 
 @router.post(
-    "/{playlist_id}/items", dependencies=[Depends(require_role("admin", "operator"))]
+    "/{playlist_id}/items", dependencies=[Depends(require_permission("playlists:write"))]
 )
 def add_item(
     playlist_id: int, payload: PlaylistItemPayload, db: Session = Depends(get_db)
@@ -68,7 +68,7 @@ def add_item(
 
 @router.get(
     "/{playlist_id}/items",
-    dependencies=[Depends(require_role("admin", "operator", "viewer"))],
+    dependencies=[Depends(require_permission("playlists:read"))],
 )
 def get_items(playlist_id: int, db: Session = Depends(get_db)):
     items = PlaylistService(db).get_items(playlist_id)
@@ -86,7 +86,7 @@ def get_items(playlist_id: int, db: Session = Depends(get_db)):
 
 @router.post(
     "/{playlist_id}/schedule",
-    dependencies=[Depends(require_role("admin", "operator"))],
+    dependencies=[Depends(require_permission("playlists:write"))],
 )
 def schedule_playlist(
     playlist_id: int,
@@ -110,7 +110,7 @@ def schedule_playlist(
     }
 
 
-@router.post("/layouts", dependencies=[Depends(require_role("admin", "operator"))])
+@router.post("/layouts", dependencies=[Depends(require_permission("playlists:write"))])
 def create_layout(payload: LayoutPayload, db: Session = Depends(get_db)):
     layout = PlaylistService(db).create_layout(payload.name, payload.definition_json)
     return {
@@ -121,7 +121,7 @@ def create_layout(payload: LayoutPayload, db: Session = Depends(get_db)):
 
 
 @router.get(
-    "/layouts", dependencies=[Depends(require_role("admin", "operator", "viewer"))]
+    "/layouts", dependencies=[Depends(require_permission("playlists:read"))]
 )
 def list_layouts(db: Session = Depends(get_db)):
     return [
