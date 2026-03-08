@@ -99,3 +99,56 @@ def test_settings_schema_and_event_stream() -> None:
     events = client.get("/events", headers=headers)
     assert events.status_code == 200
     assert any(event["action"] == "settings_apply" for event in events.json())
+
+
+def test_device_group_bulk_actions_create_events_and_logs() -> None:
+    _ensure_admin()
+    token = create_access_token(subject="admin", role="admin")
+    headers = {"Authorization": f"Bearer {token}"}
+
+    reg = client.post(
+        "/device/register", headers=headers, json={"id": "dev-bulk-1", "name": "Atrium"}
+    )
+    assert reg.status_code == 200
+
+    group = client.post("/device/groups", headers=headers, json={"name": "Bulk Ops"})
+    assert group.status_code == 200
+    group_id = group.json()["id"]
+
+    member = client.post(
+        f"/device/groups/{group_id}/members",
+        headers=headers,
+        json={"device_id": "dev-bulk-1"},
+    )
+    assert member.status_code == 200
+
+    reboot = client.post(
+        f"/device/groups/{group_id}/bulk",
+        headers=headers,
+        json={"action": "reboot"},
+    )
+    assert reboot.status_code == 200
+    body = reboot.json()
+    assert body["action"] == "reboot"
+    assert body["accepted"] == 1
+    assert body["device_ids"] == ["dev-bulk-1"]
+
+    update = client.post(
+        f"/device/groups/{group_id}/bulk",
+        headers=headers,
+        json={"action": "update", "target_version": "2.0.1"},
+    )
+    assert update.status_code == 200
+    assert update.json()["target_version"] == "2.0.1"
+
+    events = client.get("/events?limit=20", headers=headers)
+    assert events.status_code == 200
+    actions = [e["action"] for e in events.json()]
+    assert "bulk_reboot" in actions
+    assert "bulk_update" in actions
+
+    logs = client.get("/device/logs?limit=20", headers=headers)
+    assert logs.status_code == 200
+    log_actions = [entry["action"] for entry in logs.json()]
+    assert "bulk_reboot" in log_actions
+    assert "bulk_update" in log_actions
