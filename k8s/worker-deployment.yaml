@@ -1,0 +1,23 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: recall-worker
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: recall-worker
+  template:
+    metadata:
+      labels:
+        app: recall-worker
+    spec:
+      containers:
+        - name: worker
+          image: recall-api:latest
+          command: ["celery", "-A", "recall.workers.celery_app:celery_app", "worker", "--loglevel=info"]
+          env:
+            - name: DATABASE_URL
+              value: postgresql+psycopg2://recall:recall@postgres:5432/recall
+            - name: REDIS_URL
+              value: redis://redis:6379/0

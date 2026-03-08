@@ -152,3 +152,31 @@ def test_device_group_bulk_actions_create_events_and_logs() -> None:
     log_actions = [entry["action"] for entry in logs.json()]
     assert "bulk_reboot" in log_actions
     assert "bulk_update" in log_actions
+
+
+def test_stale_device_status_without_heartbeat() -> None:
+    _ensure_admin()
+    token = create_access_token(subject="admin", role="admin")
+    headers = {"Authorization": f"Bearer {token}"}
+
+    reg = client.post(
+        "/device/register", headers=headers, json={"id": "dev-stale", "name": "Hall"}
+    )
+    assert reg.status_code == 200
+
+    from recall.db.database import SessionLocal
+    from recall.models.device import Device
+
+    db = SessionLocal()
+    try:
+        device = db.query(Device).filter(Device.id == "dev-stale").first()
+        assert device is not None
+        device.last_seen = None
+        db.commit()
+    finally:
+        db.close()
+
+    listed = client.get("/device/list", headers=headers)
+    assert listed.status_code == 200
+    target = [d for d in listed.json() if d["id"] == "dev-stale"][0]
+    assert target["status"] == "stale"

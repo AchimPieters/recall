@@ -108,7 +108,7 @@ class DeviceService:
         changed = 0
         for device in devices:
             if not device.last_seen:
-                new_status = "unreachable"
+                new_status = "stale"
             elif now - (self._normalize(device.last_seen) or now) > timedelta(
                 seconds=settings.heartbeat_timeout_seconds
             ):

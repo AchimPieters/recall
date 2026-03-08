@@ -34,7 +34,7 @@ class Settings(BaseModel):
     max_upload_bytes: int = int(
         os.getenv("RECALL_MAX_UPLOAD_BYTES", str(200 * 1024 * 1024))
     )
-    heartbeat_timeout_seconds: int = int(os.getenv("HEARTBEAT_TIMEOUT", "90"))
+    heartbeat_timeout_seconds: int = int(os.getenv("HEARTBEAT_TIMEOUT", "60"))
     cors_origins: list[str] = Field(
         default_factory=lambda: [
             origin.strip()

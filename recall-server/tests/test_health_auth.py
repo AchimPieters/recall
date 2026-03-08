@@ -233,3 +233,27 @@ def test_refresh_failure_is_audited() -> None:
     payload = events.json()
     assert payload
     assert payload[0]["event_type"] == "token_refresh_failed"
+
+
+def test_auth_alias_endpoints_work() -> None:
+    _reset_login_state()
+    _ensure_admin()
+    response = client.post(
+        "/auth/login",
+        data={"username": "admin", "password": "admin"},
+        headers={"content-type": "application/x-www-form-urlencoded"},
+    )
+    assert response.status_code == 200
+    payload = response.json()
+    refreshed = client.post(
+        "/auth/refresh", json={"refresh_token": payload["refresh_token"]}
+    )
+    assert refreshed.status_code == 200
+
+
+def test_audit_logs_alias_endpoint_admin_only() -> None:
+    _reset_login_state()
+    _ensure_admin()
+    token = create_access_token(subject="admin", role="admin")
+    ok = client.get("/audit-logs", headers={"Authorization": f"Bearer {token}"})
+    assert ok.status_code == 200
