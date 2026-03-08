@@ -12,6 +12,9 @@ class Settings(BaseModel):
     jwt_secret: str = Field(default_factory=lambda: os.getenv("JWT_SECRET", ""))
     jwt_algorithm: str = "HS256"
     access_token_expire_minutes: int = 60
+    app_version: str = Field(
+        default_factory=lambda: os.getenv("RECALL_VERSION", "0.2.0")
+    )
     media_dir: str = Field(default_factory=lambda: os.getenv("MEDIA_DIR", "/media"))
     max_upload_bytes: int = int(
         os.getenv("RECALL_MAX_UPLOAD_BYTES", str(200 * 1024 * 1024))
@@ -46,6 +49,14 @@ class Settings(BaseModel):
     clamav_fail_open: bool = Field(
         default_factory=lambda: os.getenv("RECALL_CLAMAV_FAIL_OPEN", "false").lower()
         == "true"
+    )
+    auth_lockout_threshold: int = Field(
+        default_factory=lambda: int(os.getenv("RECALL_AUTH_LOCKOUT_THRESHOLD", "5")),
+        ge=1,
+    )
+    auth_lockout_minutes: int = Field(
+        default_factory=lambda: int(os.getenv("RECALL_AUTH_LOCKOUT_MINUTES", "15")),
+        ge=1,
     )
 
 

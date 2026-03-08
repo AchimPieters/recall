@@ -1,8 +1,10 @@
 import logging
 import time
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from contextlib import asynccontextmanager
 from uuid import uuid4
+from threading import Lock
 
 import structlog
 from fastapi import Depends, FastAPI, HTTPException, Request
@@ -40,6 +42,38 @@ structlog.configure(processors=[structlog.processors.JSONRenderer()])
 logger = structlog.get_logger(service="recall-api")
 
 limiter = Limiter(key_func=get_remote_address)
+
+failed_login_attempts: dict[str, list[datetime]] = {}
+failed_login_lock = Lock()
+
+
+def _prune_failed_attempts(username: str, now: datetime) -> list[datetime]:
+    window = timedelta(minutes=settings_conf.auth_lockout_minutes)
+    attempts = failed_login_attempts.get(username, [])
+    pruned = [attempt for attempt in attempts if now - attempt < window]
+    if pruned:
+        failed_login_attempts[username] = pruned
+    else:
+        failed_login_attempts.pop(username, None)
+    return pruned
+
+
+def _is_locked_out(username: str, now: datetime) -> bool:
+    with failed_login_lock:
+        attempts = _prune_failed_attempts(username, now)
+        return len(attempts) >= settings_conf.auth_lockout_threshold
+
+
+def _record_failed_login(username: str, now: datetime) -> None:
+    with failed_login_lock:
+        attempts = _prune_failed_attempts(username, now)
+        attempts.append(now)
+        failed_login_attempts[username] = attempts
+
+
+def _clear_failed_logins(username: str) -> None:
+    with failed_login_lock:
+        failed_login_attempts.pop(username, None)
 
 
 def _bootstrap_admin() -> None:
@@ -148,6 +182,14 @@ def live():
     return {"status": "live"}
 
 
+@app.get("/version")
+def version():
+    return {
+        "version": settings_conf.app_version,
+        "environment": settings_conf.environment,
+    }
+
+
 @app.get("/ready")
 def ready(db: Session = Depends(get_db)):
     db.execute(text("SELECT 1"))
@@ -161,9 +203,18 @@ def login(
     form_data: OAuth2PasswordRequestForm = Depends(),
     db: Session = Depends(get_db),
 ):
-    user = db.query(User).filter(User.username == form_data.username).first()
+    now = datetime.now(timezone.utc)
+    username = form_data.username.strip()
+
+    if _is_locked_out(username, now):
+        raise HTTPException(status_code=429, detail="Account temporarily locked")
+
+    user = db.query(User).filter(User.username == username).first()
     if not user or not verify_password(form_data.password, user.password_hash):
+        _record_failed_login(username, now)
         raise HTTPException(status_code=401, detail="Invalid credentials")
+
+    _clear_failed_logins(username)
     token = create_access_token(subject=user.username, role=user.role)
     return {"access_token": token, "token_type": "Bearer"}
 
