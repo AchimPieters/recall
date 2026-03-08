@@ -51,3 +51,16 @@ class SecurityRepository:
         self.db.commit()
         self.db.refresh(event)
         return event
+
+    def list_security_events(
+        self,
+        limit: int = 100,
+        actor: str | None = None,
+        event_type: str | None = None,
+    ) -> list[SecurityAuditEvent]:
+        query = self.db.query(SecurityAuditEvent)
+        if actor:
+            query = query.filter(SecurityAuditEvent.actor == actor)
+        if event_type:
+            query = query.filter(SecurityAuditEvent.event_type == event_type)
+        return query.order_by(SecurityAuditEvent.created_at.desc()).limit(limit).all()

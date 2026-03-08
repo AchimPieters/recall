@@ -161,3 +161,75 @@ def test_permission_enforcement_blocks_viewer_write() -> None:
         files={"file": ("x.txt", b"data", "text/plain")},
     )
     assert blocked.status_code == 403
+
+
+def test_security_audit_endpoint_admin_only() -> None:
+    _reset_login_state()
+    _ensure_admin()
+
+    login = client.post(
+        "/token",
+        data={"username": "admin", "password": "admin"},
+        headers={"content-type": "application/x-www-form-urlencoded"},
+    )
+    assert login.status_code == 200
+    admin_token = login.json()["access_token"]
+
+    events = client.get(
+        "/security/audit?limit=5",
+        headers={"Authorization": f"Bearer {admin_token}"},
+    )
+    assert events.status_code == 200
+    payload = events.json()
+    assert isinstance(payload, list)
+    assert payload
+    assert {"actor", "event_type", "detail"}.issubset(payload[0].keys())
+
+    db = SessionLocal()
+    try:
+        viewer = db.query(User).filter(User.username == "viewer2").first()
+        if not viewer:
+            viewer = User(
+                username="viewer2",
+                password_hash=get_password_hash("viewer2"),
+                role="viewer",
+            )
+            db.add(viewer)
+        else:
+            viewer.password_hash = get_password_hash("viewer2")
+            viewer.role = "viewer"
+        db.commit()
+    finally:
+        db.close()
+
+    viewer_login = client.post(
+        "/token",
+        data={"username": "viewer2", "password": "viewer2"},
+        headers={"content-type": "application/x-www-form-urlencoded"},
+    )
+    assert viewer_login.status_code == 200
+    viewer_token = viewer_login.json()["access_token"]
+
+    denied = client.get(
+        "/security/audit",
+        headers={"Authorization": f"Bearer {viewer_token}"},
+    )
+    assert denied.status_code == 403
+
+
+def test_refresh_failure_is_audited() -> None:
+    _reset_login_state()
+    _ensure_admin()
+    token = create_access_token(subject="admin", role="admin")
+
+    bad = client.post("/token/refresh", json={"refresh_token": "invalid-token"})
+    assert bad.status_code == 401
+
+    events = client.get(
+        "/security/audit?event_type=token_refresh_failed&limit=1",
+        headers={"Authorization": f"Bearer {token}"},
+    )
+    assert events.status_code == 200
+    payload = events.json()
+    assert payload
+    assert payload[0]["event_type"] == "token_refresh_failed"

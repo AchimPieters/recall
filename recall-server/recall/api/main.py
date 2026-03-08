@@ -28,6 +28,7 @@ from recall.api.routes import (
     media,
     monitor,
     playlists,
+    security,
     settings,
     system,
 )
@@ -171,6 +172,7 @@ for prefix in ("", "/api/v1"):
     app.include_router(monitor.router, prefix=prefix)
     app.include_router(settings.router, prefix=prefix)
     app.include_router(playlists.router, prefix=prefix)
+    app.include_router(security.router, prefix=prefix)
     app.include_router(system.router, prefix=prefix)
 
 device_count = Gauge("device_count", "Total devices")
@@ -291,21 +293,44 @@ def login(
 
 
 @app.post("/token/refresh")
-def refresh_token(payload: RefreshPayload, db: Session = Depends(get_db)):
+def refresh_token(
+    payload: RefreshPayload,
+    request: Request,
+    db: Session = Depends(get_db),
+):
     sec_repo = SecurityRepository(db)
+    client_ip = request.client.host if request.client else None
     try:
         subject, jti = parse_refresh_token(payload.refresh_token)
     except Exception as exc:  # noqa: BLE001
+        sec_repo.add_security_event(
+            actor="unknown",
+            event_type="token_refresh_failed",
+            detail="Malformed refresh token",
+            ip_address=client_ip,
+        )
         raise HTTPException(status_code=401, detail="Invalid refresh token") from exc
 
     token_record = sec_repo.get_active_refresh_token(hash_token(jti))
     if not token_record or _utc_normalized(token_record.expires_at) < datetime.now(
         timezone.utc
     ):
+        sec_repo.add_security_event(
+            actor=subject,
+            event_type="token_refresh_failed",
+            detail="Refresh token expired or revoked",
+            ip_address=client_ip,
+        )
         raise HTTPException(status_code=401, detail="Refresh token expired or revoked")
 
     user = db.query(User).filter(User.username == subject).first()
     if not user:
+        sec_repo.add_security_event(
+            actor=subject,
+            event_type="token_refresh_failed",
+            detail="Unknown user",
+            ip_address=client_ip,
+        )
         raise HTTPException(status_code=401, detail="Unknown user")
 
     sec_repo.revoke_refresh_token(hash_token(jti))
@@ -318,7 +343,7 @@ def refresh_token(payload: RefreshPayload, db: Session = Depends(get_db)):
         actor=user.username,
         event_type="token_refresh",
         detail="Refresh token rotated",
-        ip_address=None,
+        ip_address=client_ip,
     )
     return {
         "access_token": create_access_token(subject=user.username, role=user.role),
