@@ -45,6 +45,12 @@ class ScreenshotPayload(BaseModel):
     image_path: str = Field(min_length=1, max_length=1024)
 
 
+class BulkGroupActionPayload(BaseModel):
+    action: str = Field(pattern="^(reboot|update|playlist_assign)$")
+    target_version: str | None = Field(default=None, max_length=64)
+    playlist_id: int | None = Field(default=None, ge=1)
+
+
 @router.post(
     "/register", dependencies=[Depends(require_role("device", "admin", "operator"))]
 )
@@ -209,6 +215,33 @@ def list_groups(
         {"id": g.id, "name": g.name}
         for g in DeviceService(db).list_groups(organization_id=user.organization_id)
     ]
+
+
+@router.post(
+    "/groups/{group_id}/bulk",
+    dependencies=[Depends(require_permission("devices:write"))],
+)
+def group_bulk_action(
+    group_id: int,
+    payload: BulkGroupActionPayload,
+    db: Session = Depends(get_db),
+    user: AuthUser = Depends(get_current_user),
+):
+    svc = DeviceService(db)
+    group = svc.get_group(group_id)
+    if not group:
+        raise HTTPException(status_code=404, detail="group not found")
+    ensure_organization_access(user, group.organization_id)
+
+    result = svc.execute_group_action(
+        group_id=group_id,
+        action=payload.action,
+        actor=user.username,
+        organization_id=user.organization_id,
+        target_version=payload.target_version,
+        playlist_id=payload.playlist_id,
+    )
+    return result
 
 
 @router.post(

@@ -10,6 +10,7 @@ from recall.models.device import (
     DeviceScreenshot,
 )
 from recall.services.playlist_service import PlaylistService
+from recall.services.event_service import EventService
 
 settings = get_settings()
 
@@ -175,6 +176,79 @@ class DeviceService:
         self.db.commit()
         self.db.refresh(member)
         return member
+
+    def list_group_members(self, group_id: int) -> list[DeviceGroupMember]:
+        return (
+            self.db.query(DeviceGroupMember)
+            .filter(DeviceGroupMember.group_id == group_id)
+            .all()
+        )
+
+    def execute_group_action(
+        self,
+        group_id: int,
+        action: str,
+        actor: str,
+        organization_id: int | None,
+        target_version: str | None = None,
+        playlist_id: int | None = None,
+    ) -> dict:
+        valid_actions = {"reboot", "update", "playlist_assign"}
+        if action not in valid_actions:
+            raise ValueError("unsupported action")
+
+        group = self.get_group(group_id)
+        if not group:
+            raise ValueError("group not found")
+
+        members = self.list_group_members(group_id)
+        device_ids = [m.device_id for m in members]
+
+        details: dict[str, str | int | None] = {"group_id": group_id, "action": action}
+        if target_version:
+            details["target_version"] = target_version
+        if playlist_id is not None:
+            details["playlist_id"] = playlist_id
+
+        event = EventService(self.db).publish(
+            category="device_group",
+            action=f"bulk_{action}",
+            actor=actor,
+            payload={
+                "group_id": group_id,
+                "group_name": group.name,
+                "device_ids": device_ids,
+                "target_version": target_version,
+                "playlist_id": playlist_id,
+            },
+            organization_id=organization_id,
+        )
+
+        for device_id in device_ids:
+            message = f"bulk action={action}"
+            if target_version:
+                message += f" target_version={target_version}"
+            if playlist_id is not None:
+                message += f" playlist_id={playlist_id}"
+            self.db.add(
+                DeviceLog(
+                    device_id=device_id,
+                    level="info",
+                    action=f"bulk_{action}",
+                    message=message,
+                )
+            )
+        self.db.commit()
+
+        return {
+            "group_id": group.id,
+            "group_name": group.name,
+            "action": action,
+            "accepted": len(device_ids),
+            "device_ids": device_ids,
+            "event_id": event["id"],
+            **details,
+        }
 
     def record_screenshot(
         self, device_id: str, image_path: str, organization_id: int | None

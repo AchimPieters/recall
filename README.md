@@ -25,6 +25,10 @@ cd recall-server
 uvicorn recall.api.main:app --host 0.0.0.0 --port 8000
 ```
 
+## Configuration
+- Copy `.env.example` to `.env` and set production-grade secrets (`JWT_SECRET`, DB credentials).
+- For local parity, use PostgreSQL and Redis defaults from `docker/docker-compose.yml`.
+
 ## Testing and quality
 From `recall-server/`:
 ```bash
