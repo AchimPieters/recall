@@ -78,7 +78,7 @@ class MediaService:
         if not mime_type.startswith("video/"):
             return None
         cmd = [
-            "ffprobe",
+            settings.ffprobe_binary,
             "-v",
             "error",
             "-show_entries",
@@ -87,7 +87,15 @@ class MediaService:
             "default=noprint_wrappers=1:nokey=1",
             str(path),
         ]
-        proc = subprocess.run(cmd, capture_output=True, text=True)  # nosec B603
+        try:
+            proc = subprocess.run(
+                cmd,
+                capture_output=True,
+                text=True,
+                timeout=settings.ffprobe_timeout_seconds,
+            )  # nosec B603
+        except (OSError, subprocess.SubprocessError):
+            return None
         if proc.returncode != 0:
             return None
         try:

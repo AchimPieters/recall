@@ -57,6 +57,13 @@ class Settings(BaseModel):
     redis_url: str = Field(
         default_factory=lambda: os.getenv("REDIS_URL", "redis://localhost:6379/0")
     )
+    ffprobe_binary: str = Field(
+        default_factory=lambda: os.getenv("RECALL_FFPROBE_BINARY", "ffprobe")
+    )
+    ffprobe_timeout_seconds: int = Field(
+        default_factory=lambda: int(os.getenv("RECALL_FFPROBE_TIMEOUT_SECONDS", "5")),
+        ge=1,
+    )
     clamav_host: str = Field(
         default_factory=lambda: os.getenv("CLAMAV_HOST", "localhost")
     )

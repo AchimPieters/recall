@@ -56,3 +56,15 @@ class Layout(Base):
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
     name: Mapped[str] = mapped_column(String(255), nullable=False)
     definition_json: Mapped[str] = mapped_column(String(16384), nullable=False)
+
+
+class Zone(Base):
+    __tablename__ = "zones"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    layout_id: Mapped[int] = mapped_column(ForeignKey("layouts.id"), index=True)
+    name: Mapped[str] = mapped_column(String(255), nullable=False)
+    x: Mapped[int] = mapped_column(Integer, default=0)
+    y: Mapped[int] = mapped_column(Integer, default=0)
+    width: Mapped[int] = mapped_column(Integer, default=1920)
+    height: Mapped[int] = mapped_column(Integer, default=1080)

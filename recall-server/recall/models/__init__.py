@@ -7,7 +7,7 @@ from recall.models.device import (
     DeviceScreenshot,
 )
 from recall.models.event import Event
-from recall.models.media import Layout, Media, Playlist, PlaylistItem, Schedule
+from recall.models.media import Layout, Media, Playlist, PlaylistItem, Schedule, Zone
 from recall.models.settings import Organization, Setting, User
 from recall.models.security import RefreshToken, SecurityAuditEvent
 
@@ -24,6 +24,7 @@ __all__ = [
     "Playlist",
     "PlaylistItem",
     "Schedule",
+    "Zone",
     "Setting",
     "User",
     "Organization",

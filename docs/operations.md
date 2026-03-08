@@ -29,3 +29,10 @@
 1. Declare severity and incident commander.
 2. Freeze deploys and capture timeline in incident document.
 3. Mitigate, validate with health/readiness/metrics checks, then close with postmortem.
+
+
+## Kubernetes monitoring bootstrap
+- Apply `k8s/monitoring-stack.example.yaml` to bootstrap Prometheus and Grafana in a dedicated `monitoring` namespace.
+- The Prometheus config in that manifest scrapes `recall-api` `/metrics` every 15s.
+
+- Apply `k8s/observability-provisioning.example.yaml` to provision Loki, Alertmanager and Grafana datasources/dashboards baseline.
