@@ -125,7 +125,9 @@ def test_refresh_token_flow_rotates_token() -> None:
     payload = response.json()
     assert "refresh_token" in payload
 
-    refreshed = client.post("/token/refresh", json={"refresh_token": payload["refresh_token"]})
+    refreshed = client.post(
+        "/token/refresh", json={"refresh_token": payload["refresh_token"]}
+    )
     assert refreshed.status_code == 200
     refreshed_json = refreshed.json()
     assert refreshed_json["access_token"]

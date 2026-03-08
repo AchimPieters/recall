@@ -11,3 +11,4 @@
 
 ## Exception handling
 - Any temporary vulnerability exception must include risk, owner, expiration date, and mitigation.
+- Current temporary exception: `CVE-2024-23342` (`ecdsa` transitive dependency from `python-jose`) has no upstream fix release available; track and remove ignore once a patched release is published.

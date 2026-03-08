@@ -21,7 +21,10 @@ class Settings(BaseModel):
         ]
     )
     enforce_https: bool = Field(
-        default_factory=lambda: os.getenv("RECALL_ENFORCE_HTTPS", "false").lower()
+        default_factory=lambda: os.getenv(
+            "RECALL_ENFORCE_HTTPS",
+            "true" if os.getenv("RECALL_ENV", "dev") != "dev" else "false",
+        ).lower()
         == "true"
     )
     app_version: str = Field(

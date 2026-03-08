@@ -30,7 +30,9 @@ def create_access_token(
     return jwt.encode(payload, settings.jwt_secret, algorithm=settings.jwt_algorithm)
 
 
-def create_refresh_token(subject: str, expires_delta: timedelta | None = None) -> tuple[str, str]:
+def create_refresh_token(
+    subject: str, expires_delta: timedelta | None = None
+) -> tuple[str, str]:
     expire = datetime.now(timezone.utc) + (
         expires_delta or timedelta(minutes=settings.refresh_token_expire_minutes)
     )
@@ -41,7 +43,9 @@ def create_refresh_token(subject: str, expires_delta: timedelta | None = None) -
 
 
 def parse_refresh_token(token: str) -> tuple[str, str]:
-    payload = jwt.decode(token, settings.jwt_secret, algorithms=[settings.jwt_algorithm])
+    payload = jwt.decode(
+        token, settings.jwt_secret, algorithms=[settings.jwt_algorithm]
+    )
     if payload.get("type") != "refresh":
         raise ValueError("Invalid token type")
     subject = payload.get("sub")

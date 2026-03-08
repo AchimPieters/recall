@@ -3,7 +3,7 @@ from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
 
-from recall.core.auth import require_role
+from recall.core.auth import AuthUser, get_current_user, require_role
 from recall.db.database import get_db
 from recall.services.device_service import DeviceService
 
@@ -28,9 +28,13 @@ def monitor():
 
 
 @router.post("/alerts", dependencies=[Depends(require_role("admin", "operator"))])
-def create_alert(payload: AlertPayload, db: Session = Depends(get_db)):
+def create_alert(
+    payload: AlertPayload,
+    db: Session = Depends(get_db),
+    user: AuthUser = Depends(get_current_user),
+):
     alert = DeviceService(db).create_alert(
-        payload.level, payload.source, payload.message
+        payload.level, payload.source, payload.message, user.organization_id
     )
     return {
         "id": alert.id,
@@ -45,7 +49,11 @@ def create_alert(payload: AlertPayload, db: Session = Depends(get_db)):
 @router.get(
     "/alerts", dependencies=[Depends(require_role("admin", "operator", "viewer"))]
 )
-def list_alerts(status: str | None = None, db: Session = Depends(get_db)):
+def list_alerts(
+    status: str | None = None,
+    db: Session = Depends(get_db),
+    user: AuthUser = Depends(get_current_user),
+):
     return [
         {
             "id": alert.id,
@@ -55,7 +63,9 @@ def list_alerts(status: str | None = None, db: Session = Depends(get_db)):
             "status": alert.status,
             "created_at": alert.created_at,
         }
-        for alert in DeviceService(db).list_alerts(status=status)
+        for alert in DeviceService(db).list_alerts(
+            status=status, organization_id=user.organization_id
+        )
     ]
 
 
@@ -63,7 +73,18 @@ def list_alerts(status: str | None = None, db: Session = Depends(get_db)):
     "/alerts/{alert_id}/resolve",
     dependencies=[Depends(require_role("admin", "operator"))],
 )
-def resolve_alert(alert_id: int, db: Session = Depends(get_db)):
+def resolve_alert(
+    alert_id: int,
+    db: Session = Depends(get_db),
+    user: AuthUser = Depends(get_current_user),
+):
+    alert_obj = DeviceService(db).list_alerts(
+        status=None, organization_id=user.organization_id
+    )
+    if user.organization_id is not None and not any(
+        a.id == alert_id for a in alert_obj
+    ):
+        raise HTTPException(status_code=404, detail="alert not found")
     alert = DeviceService(db).resolve_alert(alert_id)
     if not alert:
         raise HTTPException(status_code=404, detail="alert not found")
