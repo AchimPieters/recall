@@ -26,7 +26,9 @@ class SecurityRepository:
     def get_active_refresh_token(self, token_hash: str) -> RefreshToken | None:
         return (
             self.db.query(RefreshToken)
-            .filter(RefreshToken.token_hash == token_hash, RefreshToken.revoked.is_(False))
+            .filter(
+                RefreshToken.token_hash == token_hash, RefreshToken.revoked.is_(False)
+            )
             .first()
         )
 

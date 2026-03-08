@@ -20,5 +20,16 @@ jobs:
         run: |
           python -m pip install --upgrade pip
           pip install -r requirements.txt
+          pip install "ruff==0.9.9" "black==24.10.0" "mypy==1.15.0" "bandit==1.8.2" "pip-audit==2.7.3"
+      - name: Ruff
+        run: ruff check recall tests
+      - name: Black
+        run: black --check recall tests
+      - name: Mypy
+        run: mypy --ignore-missing-imports recall
+      - name: Bandit
+        run: bandit -q -r recall -lll
+      - name: Dependency audit
+        run: pip-audit -r requirements.txt --ignore-vuln CVE-2024-23342
       - name: Run tests
         run: pytest -q

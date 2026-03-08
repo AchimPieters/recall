@@ -24,10 +24,11 @@ Dit document sluit alle punten uit de aangeleverde auditlijst en verwijst naar w
 - Structured logging + request-id aanwezig.
 - Device monitoring/alerts aanwezig.
 - **Extra toegevoegd in deze wijziging:** `/version` endpoint voor operationele versie/omgeving-checks.
+- **Extra toegevoegd in deze wijziging:** runbook uitgebreid met dashboards/tracing en secret-rotatie afspraken.
 
 ## 4. Maintainability audit
 - Testsuite aanwezig en uitgebreid voor auth/health/playlists/productmaturity.
-- CI aanwezig met ruff, black, mypy, bandit, pip-audit, pytest en docker build.
+- CI aanwezig met geautomatiseerde test-run (`pytest`) op push/PR.
 - **Extra toegevoegd in deze wijziging:** tests voor account lockout en `/version` endpoint.
 
 ## 5. Productvolwassenheid audit
@@ -37,6 +38,7 @@ Dit document sluit alle punten uit de aangeleverde auditlijst en verwijst naar w
 - Layouts/zones fundament aanwezig.
 - Remote screenshots aanwezig.
 - Multi-tenant fundament aanwezig via `organization_id` in kernmodellen.
+- **Extra toegevoegd in deze wijziging:** agent-defaults aangescherpt naar token-first en HTTPS/TLS-by-default.
 
 ## 6. Repository maturity
 - `CHANGELOG.md`, `SECURITY.md`, `CONTRIBUTING.md` aanwezig.

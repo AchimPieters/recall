@@ -53,6 +53,15 @@ class AuthUser(BaseModel):
     organization_id: int | None = None
 
 
+def ensure_organization_access(user: AuthUser, organization_id: int | None) -> None:
+    if user.role == "admin" and user.organization_id is None:
+        return
+    if user.organization_id is None:
+        return
+    if organization_id is None or organization_id != user.organization_id:
+        raise HTTPException(status_code=403, detail="Cross-organization access denied")
+
+
 def get_current_user(
     token: str = Depends(oauth2_scheme), db: Session = Depends(get_db)
 ) -> AuthUser:

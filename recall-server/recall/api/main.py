@@ -19,6 +19,7 @@ from slowapi.errors import RateLimitExceeded
 from slowapi.extension import _rate_limit_exceeded_handler
 from slowapi.util import get_remote_address
 from sqlalchemy import text
+from sqlalchemy.exc import OperationalError, ProgrammingError
 from sqlalchemy.orm import Session
 
 from recall.api.routes import (
@@ -31,6 +32,7 @@ from recall.api.routes import (
     system,
 )
 from recall.core.config import get_settings
+from recall.core.auth import AuthUser, get_current_user
 from recall.core.security import (
     create_access_token,
     create_refresh_token,
@@ -58,6 +60,12 @@ failed_login_lock = Lock()
 
 class RefreshPayload(BaseModel):
     refresh_token: str
+
+
+def _utc_normalized(dt: datetime) -> datetime:
+    if dt.tzinfo is None:
+        return dt.replace(tzinfo=timezone.utc)
+    return dt.astimezone(timezone.utc)
 
 
 def _prune_failed_attempts(username: str, now: datetime) -> list[datetime]:
@@ -115,10 +123,27 @@ def _bootstrap_admin() -> None:
         db_gen.close()
 
 
+def _ensure_runtime_schema_compat() -> None:
+    with engine.begin() as conn:
+        statements = [
+            "ALTER TABLE events ADD COLUMN organization_id INTEGER",
+            "ALTER TABLE alerts ADD COLUMN organization_id INTEGER",
+            "ALTER TABLE device_screenshots ADD COLUMN organization_id INTEGER",
+            "ALTER TABLE device_groups ADD COLUMN organization_id INTEGER",
+        ]
+        for statement in statements:
+            try:
+                conn.execute(text(statement))
+            except (OperationalError, ProgrammingError):
+                # Column likely already exists (or DB engine has equivalent schema).
+                pass
+
+
 @asynccontextmanager
 async def lifespan(_: FastAPI):
     if settings_conf.auto_create_schema:
         Base.metadata.create_all(bind=engine)
+        _ensure_runtime_schema_compat()
     _bootstrap_admin()
     logger.info("startup", action="bootstrap", status="ok")
     yield
@@ -274,7 +299,9 @@ def refresh_token(payload: RefreshPayload, db: Session = Depends(get_db)):
         raise HTTPException(status_code=401, detail="Invalid refresh token") from exc
 
     token_record = sec_repo.get_active_refresh_token(hash_token(jti))
-    if not token_record or token_record.expires_at < datetime.utcnow():
+    if not token_record or _utc_normalized(token_record.expires_at) < datetime.now(
+        timezone.utc
+    ):
         raise HTTPException(status_code=401, detail="Refresh token expired or revoked")
 
     user = db.query(User).filter(User.username == subject).first()
@@ -301,10 +328,12 @@ def refresh_token(payload: RefreshPayload, db: Session = Depends(get_db)):
 
 
 @app.get("/devices")
-def devices_summary(db: Session = Depends(get_db)):
+def devices_summary(
+    db: Session = Depends(get_db), user: AuthUser = Depends(get_current_user)
+):
     svc = DeviceService(db)
-    svc.mark_presence()
-    devices_list = svc.list_devices()
+    svc.mark_presence(organization_id=user.organization_id)
+    devices_list = svc.list_devices(organization_id=user.organization_id)
     device_count.set(len(devices_list))
     device_online.set(len([d for d in devices_list if d.status == "online"]))
     return devices_list

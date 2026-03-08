@@ -9,11 +9,16 @@ Use `docker/docker-compose.yml` for local stacks with API + PostgreSQL + Redis.
 
 Container targets:
 - recall-api
-- recall-worker (planned)
-- recall-web (planned)
-- recall-agent (planned)
+- recall-worker
+- recall-postgres
+- recall-redis
 
 ## TLS and secret management
 - Set `RECALL_ENFORCE_HTTPS=true` in production and terminate TLS at ingress/load balancer.
 - Configure `JWT_SECRETS` as a comma-separated key-ring to support rotation; first value is used for signing.
 - Keep `JWT_SECRET`/`JWT_SECRETS` in a secret manager, never in git.
+
+## Agent defaults
+- `recall-player/agent.py` defaults to `https://localhost:8000` and TLS verification enabled.
+- Prefer `RECALL_ACCESS_TOKEN` for agent authentication.
+- API-key-only mode is intentionally opt-in (`RECALL_AGENT_ALLOW_API_KEY=true`) for legacy setups.

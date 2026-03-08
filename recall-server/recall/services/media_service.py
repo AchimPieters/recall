@@ -29,7 +29,13 @@ class MediaService:
         if ext in {".exe", ".bat", ".cmd", ".sh", ".js", ".jar"}:
             raise ValueError("Blocked file extension")
 
-    def store_upload(self, original_name: str, mime_type: str, data: bytes) -> Media:
+    def store_upload(
+        self,
+        original_name: str,
+        mime_type: str,
+        data: bytes,
+        organization_id: int | None,
+    ) -> Media:
         ext = (
             Path(original_name).suffix or mimetypes.guess_extension(mime_type) or ".bin"
         )
@@ -39,6 +45,7 @@ class MediaService:
         thumb = self._thumbnail(path, mime_type)
         duration = self._duration(path, mime_type)
         media = Media(
+            organization_id=organization_id,
             name=original_name,
             path=str(path),
             mime_type=mime_type,
@@ -49,6 +56,14 @@ class MediaService:
         self.db.commit()
         self.db.refresh(media)
         return media
+
+    def list_media(self, organization_id: int | None) -> list[Media]:
+        query = self.db.query(Media)
+        if organization_id is not None:
+            query = query.filter(Media.organization_id == organization_id)
+        return (
+            query.order_by(Media.uploaded_at.desc(), Media.id.desc()).limit(500).all()
+        )
 
     def _thumbnail(self, path: Path, mime_type: str) -> str | None:
         if not mime_type.startswith("image/"):

@@ -45,7 +45,8 @@ def list_playlists(db: Session = Depends(get_db)):
 
 
 @router.post(
-    "/{playlist_id}/items", dependencies=[Depends(require_permission("playlists:write"))]
+    "/{playlist_id}/items",
+    dependencies=[Depends(require_permission("playlists:write"))],
 )
 def add_item(
     playlist_id: int, payload: PlaylistItemPayload, db: Session = Depends(get_db)
@@ -120,9 +121,7 @@ def create_layout(payload: LayoutPayload, db: Session = Depends(get_db)):
     }
 
 
-@router.get(
-    "/layouts", dependencies=[Depends(require_permission("playlists:read"))]
-)
+@router.get("/layouts", dependencies=[Depends(require_permission("playlists:read"))])
 def list_layouts(db: Session = Depends(get_db)):
     return [
         {

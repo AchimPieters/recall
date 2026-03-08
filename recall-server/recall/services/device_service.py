@@ -31,13 +31,20 @@ class DeviceService:
         return dt
 
     def register(
-        self, device_id: str, name: str, ip: str | None, version: str | None
+        self,
+        device_id: str,
+        name: str,
+        ip: str | None,
+        version: str | None,
+        organization_id: int | None,
     ) -> Device:
         device = self.db.query(Device).filter(Device.id == device_id).first()
         if not device:
             device = Device(id=device_id, name=name)
             self.db.add(device)
         device.status = "online"
+        if device.organization_id is None:
+            device.organization_id = organization_id
         device.ip = ip
         device.version = version
         device.last_seen = self._utc_now()
@@ -55,6 +62,9 @@ class DeviceService:
         self.db.commit()
         self.db.refresh(device)
         return device
+
+    def get_device(self, device_id: str) -> Device | None:
+        return self.db.query(Device).filter(Device.id == device_id).first()
 
     def get_config(self, device_id: str) -> dict:
         playlist_id = PlaylistService(self.db).resolve_active_playlist_id(device_id)
@@ -76,16 +86,23 @@ class DeviceService:
         self.db.refresh(log)
         return log
 
-    def list_logs(self, limit: int = 100) -> list[DeviceLog]:
+    def list_logs(
+        self, limit: int = 100, organization_id: int | None = None
+    ) -> list[DeviceLog]:
+        query = self.db.query(DeviceLog).join(Device, Device.id == DeviceLog.device_id)
+        if organization_id is not None:
+            query = query.filter(Device.organization_id == organization_id)
         return (
-            self.db.query(DeviceLog)
-            .order_by(DeviceLog.timestamp.desc(), DeviceLog.id.desc())
+            query.order_by(DeviceLog.timestamp.desc(), DeviceLog.id.desc())
             .limit(max(1, min(limit, 1000)))
             .all()
         )
 
-    def mark_presence(self) -> int:
-        devices = self.db.query(Device).all()
+    def mark_presence(self, organization_id: int | None = None) -> int:
+        query = self.db.query(Device)
+        if organization_id is not None:
+            query = query.filter(Device.organization_id == organization_id)
+        devices = query.all()
         now = self._utc_now()
         changed = 0
         for device in devices:
@@ -105,25 +122,42 @@ class DeviceService:
                         level="warning",
                         source="device",
                         message=f"Device {device.id} went offline",
+                        organization_id=device.organization_id,
                     )
         self.db.commit()
         return changed
 
-    def list_devices(self) -> list[Device]:
-        return self.db.query(Device).all()
+    def list_devices(self, organization_id: int | None = None) -> list[Device]:
+        query = self.db.query(Device)
+        if organization_id is not None:
+            query = query.filter(Device.organization_id == organization_id)
+        return query.all()
 
-    def create_group(self, name: str) -> DeviceGroup:
-        existing = self.db.query(DeviceGroup).filter(DeviceGroup.name == name).first()
+    def create_group(self, name: str, organization_id: int | None) -> DeviceGroup:
+        existing = (
+            self.db.query(DeviceGroup)
+            .filter(
+                DeviceGroup.name == name,
+                DeviceGroup.organization_id == organization_id,
+            )
+            .first()
+        )
         if existing:
             return existing
-        group = DeviceGroup(name=name)
+        group = DeviceGroup(name=name, organization_id=organization_id)
         self.db.add(group)
         self.db.commit()
         self.db.refresh(group)
         return group
 
-    def list_groups(self) -> list[DeviceGroup]:
-        return self.db.query(DeviceGroup).order_by(DeviceGroup.name.asc()).all()
+    def list_groups(self, organization_id: int | None = None) -> list[DeviceGroup]:
+        query = self.db.query(DeviceGroup)
+        if organization_id is not None:
+            query = query.filter(DeviceGroup.organization_id == organization_id)
+        return query.order_by(DeviceGroup.name.asc()).all()
+
+    def get_group(self, group_id: int) -> DeviceGroup | None:
+        return self.db.query(DeviceGroup).filter(DeviceGroup.id == group_id).first()
 
     def assign_group_member(self, group_id: int, device_id: str) -> DeviceGroupMember:
         existing = (
@@ -142,15 +176,25 @@ class DeviceService:
         self.db.refresh(member)
         return member
 
-    def record_screenshot(self, device_id: str, image_path: str) -> DeviceScreenshot:
-        shot = DeviceScreenshot(device_id=device_id, image_path=image_path)
+    def record_screenshot(
+        self, device_id: str, image_path: str, organization_id: int | None
+    ) -> DeviceScreenshot:
+        shot = DeviceScreenshot(
+            device_id=device_id,
+            image_path=image_path,
+            organization_id=organization_id,
+        )
         self.db.add(shot)
         self.db.commit()
         self.db.refresh(shot)
         return shot
 
-    def list_screenshots(self, device_id: str | None = None) -> list[DeviceScreenshot]:
+    def list_screenshots(
+        self, device_id: str | None = None, organization_id: int | None = None
+    ) -> list[DeviceScreenshot]:
         query = self.db.query(DeviceScreenshot)
+        if organization_id is not None:
+            query = query.filter(DeviceScreenshot.organization_id == organization_id)
         if device_id:
             query = query.filter(DeviceScreenshot.device_id == device_id)
         return (
@@ -161,15 +205,27 @@ class DeviceService:
             .all()
         )
 
-    def create_alert(self, level: str, source: str, message: str) -> Alert:
-        alert = Alert(level=level, source=source, message=message, status="open")
+    def create_alert(
+        self, level: str, source: str, message: str, organization_id: int | None
+    ) -> Alert:
+        alert = Alert(
+            level=level,
+            source=source,
+            message=message,
+            status="open",
+            organization_id=organization_id,
+        )
         self.db.add(alert)
         self.db.commit()
         self.db.refresh(alert)
         return alert
 
-    def list_alerts(self, status: str | None = None) -> list[Alert]:
+    def list_alerts(
+        self, status: str | None = None, organization_id: int | None = None
+    ) -> list[Alert]:
         query = self.db.query(Alert)
+        if organization_id is not None:
+            query = query.filter(Alert.organization_id == organization_id)
         if status:
             query = query.filter(Alert.status == status)
         return query.order_by(Alert.created_at.desc(), Alert.id.desc()).limit(200).all()
