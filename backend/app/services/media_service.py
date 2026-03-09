@@ -2,9 +2,10 @@ import hashlib
 import mimetypes
 import subprocess  # nosec B404
 from pathlib import Path
+from typing import Protocol
 from uuid import uuid4
 
-from PIL import Image
+from PIL import Image, UnidentifiedImageError
 from sqlalchemy import func
 from sqlalchemy.orm import Session
 
@@ -15,11 +16,26 @@ settings = get_settings()
 ALLOWED_MIME_PREFIXES = ("image/", "video/")
 
 
+class StorageBackend(Protocol):
+    def write_bytes(self, relative_name: str, data: bytes) -> Path: ...
+
+
+class LocalStorageBackend:
+    def __init__(self, base_dir: Path):
+        self.base_dir = base_dir
+        self.base_dir.mkdir(parents=True, exist_ok=True)
+
+    def write_bytes(self, relative_name: str, data: bytes) -> Path:
+        target = self.base_dir / relative_name
+        target.write_bytes(data)
+        return target
+
+
 class MediaService:
     def __init__(self, db: Session):
         self.db = db
         self.media_dir = Path(settings.media_dir)
-        self.media_dir.mkdir(parents=True, exist_ok=True)
+        self.storage: StorageBackend = LocalStorageBackend(self.media_dir)
 
     def validate_upload(self, filename: str, size: int, mime_type: str) -> None:
         if size > settings.max_upload_bytes:
@@ -56,6 +72,68 @@ class MediaService:
         )
         return int(current or 0) + 1
 
+    def _inspect_image(self, path: Path) -> dict:
+        try:
+            with Image.open(path) as img:
+                img.verify()
+            with Image.open(path) as img2:
+                width, height = img2.size
+                codec = (img2.format or "").lower() or None
+            return {"width": width, "height": height, "codec": codec, "duration_seconds": None}
+        except (UnidentifiedImageError, OSError) as exc:
+            raise ValueError(f"Corrupt image upload: {exc}") from exc
+
+    def _inspect_video(self, path: Path) -> dict:
+        cmd = [
+            settings.ffprobe_binary,
+            "-v",
+            "error",
+            "-show_entries",
+            "stream=codec_name,width,height:format=duration",
+            "-of",
+            "default=noprint_wrappers=1:nokey=0",
+            str(path),
+        ]
+        try:
+            proc = subprocess.run(
+                cmd,
+                capture_output=True,
+                text=True,
+                timeout=settings.ffprobe_timeout_seconds,
+            )  # nosec B603
+        except (OSError, subprocess.SubprocessError):
+            return {"width": None, "height": None, "codec": None, "duration_seconds": None}
+
+        if proc.returncode != 0:
+            return {"width": None, "height": None, "codec": None, "duration_seconds": None}
+
+        parsed: dict[str, str] = {}
+        for line in proc.stdout.splitlines():
+            if "=" not in line:
+                continue
+            key, value = line.split("=", 1)
+            parsed[key.strip()] = value.strip()
+
+        try:
+            duration = int(float(parsed.get("duration", "0"))) if parsed.get("duration") else None
+        except ValueError:
+            duration = None
+
+        def _to_int(v: str | None) -> int | None:
+            if not v:
+                return None
+            try:
+                return int(v)
+            except ValueError:
+                return None
+
+        return {
+            "width": _to_int(parsed.get("width")),
+            "height": _to_int(parsed.get("height")),
+            "codec": parsed.get("codec_name"),
+            "duration_seconds": duration,
+        }
+
     def store_upload(
         self,
         original_name: str,
@@ -72,10 +150,16 @@ class MediaService:
             Path(original_name).suffix or mimetypes.guess_extension(mime_type) or ".bin"
         )
         filename = f"{uuid4().hex}{ext}"
-        path = self.media_dir / filename
-        path.write_bytes(data)
+        path = self.storage.write_bytes(filename, data)
+
+        if mime_type.startswith("image/"):
+            meta = self._inspect_image(path)
+        elif mime_type.startswith("video/"):
+            meta = self._inspect_video(path)
+        else:
+            meta = {"width": None, "height": None, "codec": None, "duration_seconds": None}
+
         thumb = self._thumbnail(path, mime_type)
-        duration = self._duration(path, mime_type)
 
         media = (
             self.db.query(Media)
@@ -86,7 +170,7 @@ class MediaService:
             media.path = str(path)
             media.mime_type = mime_type
             media.thumbnail_path = thumb
-            media.duration_seconds = duration
+            media.duration_seconds = meta["duration_seconds"]
             version = self._next_version(media.id)
         else:
             media = Media(
@@ -95,7 +179,7 @@ class MediaService:
                 path=str(path),
                 mime_type=mime_type,
                 thumbnail_path=thumb,
-                duration_seconds=duration,
+                duration_seconds=meta["duration_seconds"],
             )
             self.db.add(media)
             self.db.flush()
@@ -108,15 +192,23 @@ class MediaService:
                 path=str(path),
                 checksum=checksum,
                 file_size=len(data),
-                codec=None,
-                width=None,
-                height=None,
-                duration_seconds=duration,
+                codec=meta["codec"],
+                width=meta["width"],
+                height=meta["height"],
+                duration_seconds=meta["duration_seconds"],
             )
         )
         self.db.commit()
         self.db.refresh(media)
         return media
+
+    def latest_version(self, media_id: int) -> MediaVersion | None:
+        return (
+            self.db.query(MediaVersion)
+            .filter(MediaVersion.media_id == media_id)
+            .order_by(MediaVersion.version.desc())
+            .first()
+        )
 
     def list_media(self, organization_id: int | None) -> list[Media]:
         query = self.db.query(Media)
@@ -132,32 +224,3 @@ class MediaService:
             img.thumbnail((320, 320))
             img.convert("RGB").save(thumb_path, "JPEG")
         return str(thumb_path)
-
-    def _duration(self, path: Path, mime_type: str) -> int | None:
-        if not mime_type.startswith("video/"):
-            return None
-        cmd = [
-            settings.ffprobe_binary,
-            "-v",
-            "error",
-            "-show_entries",
-            "format=duration",
-            "-of",
-            "default=noprint_wrappers=1:nokey=1",
-            str(path),
-        ]
-        try:
-            proc = subprocess.run(
-                cmd,
-                capture_output=True,
-                text=True,
-                timeout=settings.ffprobe_timeout_seconds,
-            )  # nosec B603
-        except (OSError, subprocess.SubprocessError):
-            return None
-        if proc.returncode != 0:
-            return None
-        try:
-            return int(float(proc.stdout.strip()))
-        except ValueError:
-            return None

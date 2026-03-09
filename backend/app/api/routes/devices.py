@@ -14,10 +14,25 @@ from backend.app.services.device_service import DeviceService
 router = APIRouter(prefix="/device", tags=["devices"])
 
 
+class DeviceCapabilitiesPayload(BaseModel):
+    os: str | None = None
+    hardware_type: str | None = None
+    display_outputs: int | None = Field(default=None, ge=0)
+    cpu: str | None = None
+    memory_mb: int | None = Field(default=None, ge=0)
+    resolution: str | None = None
+    agent_version: str | None = None
+    connectivity: str | None = None
+
+    def as_dict(self) -> dict:
+        return self.model_dump(exclude_none=True)
+
+
 class RegisterPayload(BaseModel):
     id: str
     name: str = "Unnamed"
     version: str | None = None
+    capabilities: DeviceCapabilitiesPayload | None = None
 
 
 class HeartbeatPayload(BaseModel):
@@ -68,6 +83,17 @@ class PlaybackStatusPayload(BaseModel):
     detail: str | None = Field(default=None, max_length=1024)
 
 
+
+
+class TagPayload(BaseModel):
+    name: str = Field(min_length=1, max_length=128)
+
+
+class DeviceTagAssignPayload(BaseModel):
+    device_id: str = Field(min_length=1, max_length=64)
+    tag: str = Field(min_length=1, max_length=128)
+
+
 class BulkGroupActionPayload(BaseModel):
     action: str = Field(pattern="^(reboot|update|playlist_assign|rollback)$")
     target_version: str | None = Field(default=None, max_length=64)
@@ -90,6 +116,7 @@ def register(
         request.client.host if request.client else None,
         payload.version,
         user.organization_id,
+        payload.capabilities.as_dict() if payload.capabilities else None,
     )
     ensure_organization_access(user, device.organization_id)
     return {"id": device.id, "status": device.status, "last_seen": device.last_seen}
@@ -296,11 +323,30 @@ def playback_status(
 
 @router.get("/list", dependencies=[Depends(require_permission("devices:read"))])
 def list_devices(
-    db: Session = Depends(get_db), user: AuthUser = Depends(get_current_user)
+    status: str | None = None,
+    group_id: int | None = None,
+    tag: str | None = None,
+    version: str | None = None,
+    last_seen_before: str | None = None,
+    db: Session = Depends(get_db),
+    user: AuthUser = Depends(get_current_user),
 ):
     svc = DeviceService(db)
     svc.mark_presence(organization_id=user.organization_id)
-    return svc.list_devices(organization_id=user.organization_id)
+
+    parsed_last_seen = None
+    if last_seen_before:
+        from datetime import datetime
+        parsed_last_seen = datetime.fromisoformat(last_seen_before)
+
+    return svc.list_devices(
+        organization_id=user.organization_id,
+        status=status,
+        group_id=group_id,
+        tag=tag,
+        version=version,
+        last_seen_before=parsed_last_seen,
+    )
 
 
 @router.post("/groups", dependencies=[Depends(require_permission("devices:write"))])
@@ -309,7 +355,7 @@ def create_group(
     db: Session = Depends(get_db),
     user: AuthUser = Depends(get_current_user),
 ):
-    group = DeviceService(db).create_group(payload.name, user.organization_id)
+    group = DeviceService(db).create_group(payload.name, user.organization_id, actor_role=user.role)
     return {"id": group.id, "name": group.name}
 
 
@@ -321,6 +367,43 @@ def list_groups(
         {"id": g.id, "name": g.name}
         for g in DeviceService(db).list_groups(organization_id=user.organization_id)
     ]
+
+
+
+
+@router.post("/tags", dependencies=[Depends(require_permission("devices:write"))])
+def create_tag(
+    payload: TagPayload,
+    db: Session = Depends(get_db),
+    user: AuthUser = Depends(get_current_user),
+):
+    tag = DeviceService(db).create_tag(payload.name, user.organization_id)
+    return {"id": tag.id, "name": tag.name}
+
+
+@router.get("/tags", dependencies=[Depends(require_permission("devices:read"))])
+def list_tags(
+    db: Session = Depends(get_db),
+    user: AuthUser = Depends(get_current_user),
+):
+    return [
+        {"id": t.id, "name": t.name}
+        for t in DeviceService(db).list_tags(organization_id=user.organization_id)
+    ]
+
+
+@router.post("/tags/assign", dependencies=[Depends(require_permission("devices:write"))])
+def assign_tag(
+    payload: DeviceTagAssignPayload,
+    db: Session = Depends(get_db),
+    user: AuthUser = Depends(get_current_user),
+):
+    svc = DeviceService(db)
+    device = svc.get_device(payload.device_id)
+    if not device:
+        raise HTTPException(status_code=404, detail="device not found")
+    ensure_organization_access(user, device.organization_id)
+    return svc.assign_tag(payload.device_id, payload.tag, user.organization_id)
 
 
 @router.post(
@@ -347,6 +430,7 @@ def group_bulk_action(
             organization_id=user.organization_id,
             target_version=payload.target_version,
             playlist_id=payload.playlist_id,
+            actor_role=user.role,
         )
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
@@ -368,5 +452,5 @@ def add_group_member(
     if not group:
         raise HTTPException(status_code=404, detail="group not found")
     ensure_organization_access(user, group.organization_id)
-    member = svc.assign_group_member(group_id, payload.device_id)
+    member = svc.assign_group_member(group_id, payload.device_id, actor_role=user.role)
     return {"id": member.id, "group_id": member.group_id, "device_id": member.device_id}

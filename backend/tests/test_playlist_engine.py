@@ -25,6 +25,9 @@ def test_playlist_assignments_and_fallback_resolution() -> None:
     db.add(DeviceGroupMember(group_id=7, device_id="dev-1"))
     db.commit()
 
+    svc.add_item(p1.id, media_id=1, content_type="image")
+    svc.add_item(p2.id, media_id=2, content_type="video")
+
     svc.add_assignment(playlist_id=p2.id, target_type="group", target_id="7", is_fallback=True, priority=200)
     svc.add_assignment(playlist_id=p1.id, target_type="device", target_id="dev-1", is_fallback=False, priority=10)
 
@@ -43,9 +46,26 @@ def test_schedule_has_precedence_over_assignment() -> None:
     db.add(Device(id="dev-2", name="D2", status="online"))
     db.commit()
 
+    svc.add_item(sched_playlist.id, media_id=10, content_type="image")
+    svc.add_item(assigned_playlist.id, media_id=11, content_type="image")
+
     svc.add_assignment(playlist_id=assigned_playlist.id, target_type="device", target_id="dev-2")
     svc.schedule_playlist(playlist_id=sched_playlist.id, target="dev-2", starts_at=None, ends_at=None)
 
     resolved = svc.resolve_for_device("dev-2")
     assert resolved["playlist_id"] == sched_playlist.id
     assert resolved["source"] == "schedule"
+
+
+def test_playlist_supports_web_url_and_widget_items() -> None:
+    db = _db_session()
+    svc = PlaylistService(db)
+
+    web = svc.create_playlist("Web")
+    widget = svc.create_playlist("Widget")
+
+    svc.add_item(web.id, media_id=None, content_type="web_url", source_url="https://example.com", duration_seconds=30)
+    svc.add_item(widget.id, media_id=None, content_type="widget", widget_config='{"type":"clock"}', duration_seconds=15)
+
+    assert svc.validate_playlist_playable(web.id)
+    assert svc.validate_playlist_playable(widget.id)

@@ -12,40 +12,64 @@ settings = get_settings()
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/token")
 
 ROLE_PERMISSIONS: dict[str, set[str]] = {
+    "superadmin": {
+        "users.read",
+        "users.write",
+        "devices.read",
+        "devices.write",
+        "devices.manage",
+        "media.read",
+        "media.upload",
+        "media.delete",
+        "playlists.read",
+        "playlists.manage",
+        "settings.read",
+        "settings.manage",
+        "system.reboot",
+        "system.update",
+        "monitor.read",
+        "monitor.write",
+    },
     "admin": {
-        "devices:read",
-        "devices:write",
-        "media:read",
-        "media:write",
-        "playlists:read",
-        "playlists:write",
-        "settings:read",
-        "settings:write",
-        "system:write",
-        "monitor:read",
-        "monitor:write",
-        "users:read",
-        "users:write",
+        "users.read",
+        "users.write",
+        "devices.read",
+        "devices.write",
+        "devices.manage",
+        "media.read",
+        "media.upload",
+        "media.delete",
+        "playlists.read",
+        "playlists.manage",
+        "settings.read",
+        "settings.manage",
+        "system.reboot",
+        "system.update",
+        "monitor.read",
+        "monitor.write",
     },
     "operator": {
-        "devices:read",
-        "devices:write",
-        "media:read",
-        "media:write",
-        "playlists:read",
-        "playlists:write",
-        "settings:read",
-        "monitor:read",
-        "monitor:write",
+        "devices.read",
+        "devices.write",
+        "media.read",
+        "media.upload",
+        "playlists.read",
+        "playlists.manage",
+        "settings.read",
+        "monitor.read",
+        "monitor.write",
     },
     "viewer": {
-        "devices:read",
-        "media:read",
-        "playlists:read",
-        "settings:read",
-        "monitor:read",
+        "devices.read",
+        "media.read",
+        "playlists.read",
+        "settings.read",
+        "monitor.read",
     },
-    "device": {"devices:write", "monitor:write"},
+    "device": {
+        "devices.write",
+        "monitor.write",
+    },
 }
 
 
@@ -56,16 +80,32 @@ class AuthUser(BaseModel):
 
 
 def normalize_permission(permission: str) -> str:
-    perm = permission.strip().lower().replace('.', ':')
-    if perm.endswith(':manage'):
-        return perm.replace(':manage', ':write')
-    return perm
+    perm = permission.strip().lower().replace(":", ".")
+    aliases = {
+        "media.write": "media.upload",
+        "playlists.write": "playlists.manage",
+        "settings.write": "settings.manage",
+        "system.write": "system.update",
+    }
+    if perm.endswith(".manage"):
+        return perm
+    return aliases.get(perm, perm)
 
 
 def role_has_permission(role: str, permission: str) -> bool:
     normalized = normalize_permission(permission)
-    permissions = {normalize_permission(p) for p in ROLE_PERMISSIONS.get(role, set())}
-    return normalized in permissions
+    normalized_perms = {normalize_permission(p) for p in ROLE_PERMISSIONS.get(role, set())}
+
+    if normalized in normalized_perms:
+        return True
+
+    # manage supersets for common domains
+    if normalized.endswith(".write"):
+        manage = normalized.replace(".write", ".manage")
+        if manage in normalized_perms:
+            return True
+
+    return False
 
 
 def enforce_role_permission(role: str, permission: str) -> None:
@@ -74,7 +114,7 @@ def enforce_role_permission(role: str, permission: str) -> None:
 
 
 def ensure_organization_access(user: AuthUser, organization_id: int | None) -> None:
-    if user.role == "admin" and user.organization_id is None:
+    if user.role in {"admin", "superadmin"} and user.organization_id is None:
         return
     if user.organization_id is None:
         return

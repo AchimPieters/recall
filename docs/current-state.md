@@ -1,16 +1,37 @@
 # Current State Baseline (Frozen)
 
-_Last updated: 2026-03-08_
+_Last updated: 2026-03-09_
+_Baseline branch: `enterprise-platform`_
 
-## Scope and freeze intent
-This document freezes the current implementation baseline before enterprise rebuild work proceeds. The current platform already contains a partially modularized backend (`recall-server/recall`), a React frontend (`frontend/src`), and a modularized agent (`recall-player/agent_modules`).
+## 1. Doel van deze baseline
+Deze baseline bevriest de huidige technische situatie voordat verdere enterprise-herbouwstappen worden uitgevoerd. Het doel is expliciet: **geen chaotische verbouwing zonder vaste architectuurkeuzes**.
 
-## Repository inventory
+## 2. Volledige inventarisatie van de huidige codebase
 
-### Backend endpoints (FastAPI)
-Mounted with and without `/api/v1` prefix.
+### 2.1 Backend endpoints (FastAPI)
+De API wordt gemount op zowel root als `/api/v1`.
 
-- Device protocol and fleet endpoints
+- Platform/core:
+  - `GET /`
+  - `GET /health`
+  - `GET /live`
+  - `GET /ready`
+  - `GET /version`
+  - `GET /metrics`
+- Auth/security:
+  - `POST /token`
+  - `POST /auth/login`
+  - `POST /token/refresh`
+  - `POST /auth/refresh`
+  - `POST /auth/logout`
+  - `POST /auth/logout-all`
+  - `POST /auth/password-reset/request`
+  - `POST /auth/password-reset/confirm`
+  - `POST /auth/activate`
+  - `GET /audit-logs`
+  - `GET /security/audit`
+  - `GET /security/audit/logs`
+- Devices/protocol/fleet:
   - `POST /device/register`
   - `POST /device/heartbeat`
   - `GET /device/config`
@@ -19,154 +40,137 @@ Mounted with and without `/api/v1` prefix.
   - `POST /device/screenshot`
   - `GET /device/screenshots`
   - `POST /device/metrics`
+  - `POST /device/commands/enqueue`
+  - `GET /device/commands`
+  - `POST /device/command-ack`
+  - `POST /device/playback-status`
   - `GET /device/list`
   - `POST /device/groups`
   - `GET /device/groups`
-  - `POST /device/groups/{group_id}/members`
   - `POST /device/groups/{group_id}/bulk`
-- Media
+  - `POST /device/groups/{group_id}/members`
+  - `POST /device/tags`
+  - `GET /device/tags`
+  - `POST /device/tags/assign`
+- Media:
   - `POST /media/upload`
   - `GET /media`
-- Playlists and layouts
+- Playlists/scheduling/layouts:
   - `POST /playlists`
   - `GET /playlists`
   - `POST /playlists/{playlist_id}/items`
   - `GET /playlists/{playlist_id}/items`
   - `POST /playlists/{playlist_id}/schedule`
+  - `POST /playlists/schedules`
+  - `POST /playlists/schedules/{schedule_id}/exceptions`
+  - `POST /playlists/schedules/blackouts`
+  - `GET /playlists/schedules/resolve/preview`
+  - `POST /playlists/resolve/at`
+  - `GET /playlists/resolve/preview`
+  - `GET /playlists/resolve/device/{device_id}`
   - `POST /playlists/layouts`
+  - `POST /playlists/layouts/{layout_id}/zones`
+  - `POST /playlists/zones/{zone_id}/playlist`
+  - `GET /playlists/layouts/{layout_id}/preview`
   - `GET /playlists/layouts`
-- Settings
+- Settings:
   - `GET /settings`
   - `POST /settings`
   - `POST /settings/apply`
-- Monitoring and alerts
+  - `GET /settings/history`
+  - `POST /settings/rollback`
+- Monitoring/events/system:
   - `GET /monitor`
   - `POST /monitor/alerts`
   - `GET /monitor/alerts`
   - `POST /monitor/alerts/{alert_id}/resolve`
-- Security and audit
-  - `GET /security/audit`
-- Events and system
   - `GET /events`
   - `POST /system/reboot`
   - `POST /system/update`
-- Platform and observability
-  - `GET /`
-  - `POST /auth/login`, `POST /auth/refresh`, `POST /auth/logout`
-  - `GET /health`, `GET /ready`, `GET /metrics`
 
-### Agent functionality (current)
-The player agent is split into modules and currently supports:
-- auth/runtime configuration validation
-- device registration + heartbeat/config polling
-- OTA version reporting
-- media download
-- local config caching
-- offline playback from cached file
-- retry/backoff watchdog loop
+### 2.2 Agent functionaliteit (huidig)
+De agent is modulair opgezet (`agent/agent_modules` en `recall-player/agent_modules`) met o.a.:
+- config en auth initialisatie
+- device registratie + heartbeat
+- config polling
+- media downloader/cache
+- player + scheduler paden
+- metrics/logging/screenshot paden
+- updater/watchdog/recovery-gerichte modules (incl. lokale recovery failure tracking)
+- offline playback/fallback gedrag met reconnect/backoff
 
-### Web pages / UI
-Two UI layers currently exist:
-- Legacy static pages in `recall-server/web/` (`index.html`, `devices.html`, `media.html`, `monitor.html`, `settings.html`)
-- React + TypeScript frontend in `frontend/src/pages/` with pages:
-  - Dashboard
-  - Devices
-  - Media
-  - Playlists
-  - Schedules
-  - Alerts
-  - Audit Logs
-  - Settings
+### 2.3 Webpagina’s
+Er bestaan twee UI-lagen:
+- Legacy static pagina’s in `recall-server/web/`:
+  - `index.html`, `devices.html`, `media.html`, `monitor.html`, `settings.html`
+- React + TypeScript frontend in `frontend/src/pages/`:
+  - Dashboard, Devices, Media, Playlists, Schedules, Alerts, Audit Logs, Settings
 
-### Docker / deployment setup
-- Docker assets:
-  - `docker/Dockerfile`
-  - `docker/frontend.Dockerfile`
-  - `docker/docker-compose.yml`
-- Kubernetes manifests/examples in `k8s/`:
-  - API deployment
-  - worker deployment
-  - frontend deployment
-  - namespace+secrets template
-  - monitoring stack/provisioning examples
+### 2.4 Docker setup
+- `docker/Dockerfile` (backend)
+- `docker/frontend.Dockerfile` (frontend)
+- `docker/docker-compose.yml` (dev stack)
+- Kubernetes manifests/templates onder `k8s/` (api, worker, frontend, monitoring/secrets voorbeelden)
 
-### Settings and configuration
-- Central config via `recall.core.config` (environment-driven)
-- Database-backed settings via settings model/repository/service
-- Security-sensitive behavior configured via env variables (JWT, lockout, CORS, etc.)
-- `.env.example` now exists at repository root as environment baseline template
+### 2.5 Settings
+- Centrale configlaag op basis van environment variabelen (`backend.app.core.config`)
+- Database-backed settings + history/rollback paden aanwezig met expliciete scopes: global, organization en device
+- Security- en auth-gerelateerde instellingen centraal geconfigureerd
+- Root `.env.example` aanwezig als baseline
 
-### Device behavior (runtime)
-Current inferred player/server behavior:
-- device registers and heartbeats periodically
-- server updates presence/status from heartbeat + metrics
-- agent fetches config, downloads media, and plays cached content
-- if network/API fails, agent attempts offline playback and retries with backoff
-- device logs and screenshots can be uploaded
+### 2.6 Device gedrag
+- Device registreert zich en verstuurt periodiek heartbeat/metrics
+- Server leidt presence/status af en bewaart logs/screenshots
+- Device kan config ophalen (incl. zone_plan), en commands fetchen + ack terugsturen
+- Playback-status wordt server-side geregistreerd
+- Agent hanteert retry/backoff en offline cache-afspeelpad
 
-## Current architecture summary and limitations
+## 3. Huidige architectuur (kort) + beperkingen
 
-### What exists now
-- FastAPI backend with route/service/repository split in `recall-server/recall`
-- SQLAlchemy models and Alembic baseline migration
-- role and permission checks in API dependencies
-- JWT auth endpoints with refresh/logout patterns
-- Celery worker scaffolding
-- React+TypeScript frontend (Vite)
-- agent code already partially modular
-- observability endpoints (`/health`, `/ready`, `/metrics`) and Prometheus instrumentation
+### Wat bestaat nu
+- FastAPI backend met route/service/repository scheiding in `backend/app`
+- SQLAlchemy-modellen + migraties (incl. enterprise-uitbreidingen)
+- JWT auth + refresh + lockout/rate-limit fundament
+- RBAC/permission dependencies
+- React + TypeScript frontend (Vite)
+- Modulaire agentcode
+- Celery workers + Redis richting
+- Health/readiness/metrics + observability fundament
 
-### Key limitations (to resolve in enterprise rebuild)
-- Repository layout is still mixed (`recall-server`, `recall-player`, `tools`, `docker`, legacy web)
-- Legacy static web app still coexists with React app
-- Not all enterprise domain models from target list are present/normalized
-- Some auth hardening flows are partial (e.g., MFA optionality, full session revocation breadth)
-- Protocol documentation and implementation naming are not fully harmonized (`device_protocol.md` vs `device-protocol.md`)
-- End-to-end CI quality/security gates and release automation still need full enforcement
+### Belangrijkste beperkingen
+- Legacy en nieuwe paden bestaan nog naast elkaar (`recall-server`, `recall-player` vs `backend`, `agent`)
+- Niet alle enterprise-workflows zijn volledig doorgevoerd in UI en operationele processen
+- Dubbele documentatiebestanden voor device protocol bestaan nog (`device_protocol.md` en `device-protocol.md`)
+- Volledige kwaliteitsgates/release-automatisering en hardening zijn nog niet uniform afgedwongen over alle onderdelen
 
-## Features to preserve during rebuild
-- FastAPI API surface and dual-prefix compatibility (`/` and `/api/v1`)
-- Device registration, heartbeat, metrics, logs, screenshots, config fetch
-- Media upload with validation and malware scanning path
-- Playlist, schedule, and layout primitives already present
-- Alert creation/list/resolve and monitoring endpoint
-- Security audit events endpoint
-- JWT login/refresh/logout workflow and password hashing
-- Role/permission enforcement foundations
-- Multi-tenant isolation behavior currently covered by tests
-- Agent offline playback + cache + retry behavior
-- Existing runbooks and operational docs
+## 4. Features die behouden moeten blijven
+- FastAPI als backend runtime + dual prefix API mounting
+- Device register/heartbeat/config/metrics/logs/screenshots/commands/playback-status
+- Media upload + validatie/scanning pipeline met metadata-inspectie en corrupt-upload detectie
+- Playlist/schedule/layout fundament en resolvers
+- Settings versiebeheer + rollback
+- Monitoring + alerts + events
+- JWT auth + refresh + lockout fundamentals
+- RBAC/permissions en tenant-isolatie basis
+- Agent offline playback/cache/reconnect/watchdog basis
+- Bestaande runbooks en operationele documentatie
 
-## Missing enterprise features (gap list)
-- Clean target repo layout rooted at `backend/`, `frontend/`, `agent/`, `deploy/`, `observability/`
-- Full normalized enterprise schema for all listed entities and constraints
-- Formal settings versioning + rollback workflow with complete audit coupling
-- Extended auth hardening (MFA policy, stronger lock/revocation controls, advanced abuse defenses)
-- Fully comprehensive RBAC matrix enforcement in services + frontend UI gating coverage
-- Immutable, queryable, admin-UI audit log workflow for all critical action families
-- Formally versioned device protocol contract with strict schema compatibility lifecycle
-- Fully hardened enterprise agent modules (recovery, watchdog, updater compatibility checks, systemd hardening profile)
-- Complete media pipeline (async transcode/thumbnail/scanning pipeline with abstraction for S3-compatible storage)
-- Industrial playlist/scheduling/layout resolvers with preview and conflict simulation UX
-- Fleet-scale provisioning, bulk actions, health scoring, and deep filtering
-- Alert rules engine + notification channels + acknowledgement lifecycle
-- Mature async job platform (retry policy, dead-letter visibility, task observability)
-- Full OTA staged rollout + rollback orchestration and tracking
-- Full observability stack-as-code (Prometheus, Grafana, Loki dashboards + runbooks)
-- Production-grade deployment targets (compose prod, k8s/helm, backup/restore automation)
-- Broad automated testing strategy with coverage targets and e2e critical flows
-- Strict CI/CD quality/security gates + release artifact automation
-- Complete enterprise repo hygiene, onboarding, and architecture documentation completeness
+## 5. Ontbrekende enterprise-features (gaplijst)
+- Volledige consolidatie naar één canonical codepad (legacy volledig uitfaseren)
+- Verdere normalisatie/constraints van volledig enterprise datamodel en lifecycle governance
+- Breder afgedekte enterprise-auth flows (MFA afdwinging, complete session revocation matrix)
+- End-to-end permission enforcement inclusief frontend zichtbaarheid per actie
+- Immutable audit logging voor alle kritieke domeinacties + rijk admin UI gebruikspaden
+- Volledig geformaliseerd versioned device protocol met compatibiliteitsbeleid
+- Volledige media pipeline op workerschaal (scan/transcode/thumbnail/S3-abstractie + DLQ observability)
+- Fleet management op grote schaal (provisioning, health score, geavanceerde bulk workflows)
+- OTA staged rollouts met sterke rollback- en compatibiliteitscontroles
+- Productieklare deployment- en releaseautomatisering met recovery-oefeningen
+- Hogere, aantoonbare testdekking op kernlogica + kritieke e2e-flows
 
-## Enterprise migration progress snapshot
-- Enterprise target roots aanwezig: `backend/`, `frontend/`, `agent/`, `deploy/`, `docs/`, `.github/`, `observability/`.
-- Legacy backend bron is overgezet naar `backend/app/` (transitional copy) zodat nieuwe ontwikkeling in de doellocatie kan starten.
-- Legacy agent bron is overgezet naar `agent/` (transitional copy) als basis voor verdere modularisatie en hardening.
-
-## Freeze checklist result
-- [x] Baseline branch created for enterprise rebuild: `enterprise-platform`
-- [x] Technical baseline documented (this file)
-- [x] Preserve-feature list documented
-- [x] Missing enterprise-feature gap list documented
-
-Zie ook voortgangsregistratie: `docs/enterprise-execution-status.md`.
+## 6. Freeze check
+- [x] Nieuwe hoofdbrach voor herbouw: `enterprise-platform`
+- [x] Volledige inventarisatie vastgelegd
+- [x] Huidige architectuur + beperkingen vastgelegd
+- [x] Behoud-lijst van features vastgelegd
+- [x] Gap-lijst van ontbrekende enterprise features vastgelegd

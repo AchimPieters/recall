@@ -1,6 +1,7 @@
 from io import BytesIO
 from pathlib import Path
 
+import pytest
 from PIL import Image
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
@@ -18,8 +19,8 @@ def _db_session():
     return Session()
 
 
-def _png_bytes(color: str) -> bytes:
-    img = Image.new("RGB", (16, 16), color=color)
+def _png_bytes(color: str, size: tuple[int, int] = (16, 16)) -> bytes:
+    img = Image.new("RGB", size, color=color)
     buf = BytesIO()
     img.save(buf, format="PNG")
     return buf.getvalue()
@@ -37,5 +38,35 @@ def test_media_duplicate_detection_and_versioning(tmp_path: Path, monkeypatch) -
     updated = svc.store_upload("banner.png", "image/png", _png_bytes("blue"), organization_id=1)
     assert updated.id == first.id
 
-    versions = db.query(MediaVersion).filter(MediaVersion.media_id == first.id).order_by(MediaVersion.version).all()
+    versions = (
+        db.query(MediaVersion)
+        .filter(MediaVersion.media_id == first.id)
+        .order_by(MediaVersion.version)
+        .all()
+    )
     assert [v.version for v in versions] == [1, 2]
+
+
+def test_image_metadata_is_stored(tmp_path: Path, monkeypatch) -> None:
+    db = _db_session()
+    monkeypatch.setattr(media_service_module.settings, "media_dir", str(tmp_path))
+
+    svc = MediaService(db)
+    media = svc.store_upload("poster.png", "image/png", _png_bytes("green", (20, 30)), organization_id=1)
+    latest = svc.latest_version(media.id)
+
+    assert latest is not None
+    assert latest.width == 20
+    assert latest.height == 30
+    assert latest.codec == "png"
+    assert latest.file_size is not None and latest.file_size > 0
+    assert latest.checksum is not None
+
+
+def test_corrupt_image_rejected(tmp_path: Path, monkeypatch) -> None:
+    db = _db_session()
+    monkeypatch.setattr(media_service_module.settings, "media_dir", str(tmp_path))
+
+    svc = MediaService(db)
+    with pytest.raises(ValueError, match="Corrupt image upload"):
+        svc.store_upload("broken.png", "image/png", b"not-a-real-image", organization_id=1)

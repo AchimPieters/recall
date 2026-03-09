@@ -35,9 +35,13 @@ class PlaylistItem(Base):
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
     playlist_id: Mapped[int] = mapped_column(ForeignKey("playlists.id"), index=True)
-    media_id: Mapped[int] = mapped_column(ForeignKey("media.id"), index=True)
+    media_id: Mapped[int | None] = mapped_column(ForeignKey("media.id"), index=True, nullable=True)
+    content_type: Mapped[str] = mapped_column(String(32), default="image")
+    source_url: Mapped[str | None] = mapped_column(String(1024), nullable=True)
+    widget_config: Mapped[str | None] = mapped_column(String(4096), nullable=True)
     position: Mapped[int] = mapped_column(Integer, default=0)
     duration_seconds: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    transition_seconds: Mapped[int | None] = mapped_column(Integer, nullable=True)
 
 
 class Schedule(Base):
@@ -51,6 +55,28 @@ class Schedule(Base):
     recurrence: Mapped[str | None] = mapped_column(String(128), nullable=True)
     priority: Mapped[int] = mapped_column(Integer, default=100)
     timezone: Mapped[str] = mapped_column(String(64), default="UTC")
+
+
+
+
+class ScheduleException(Base):
+    __tablename__ = "schedule_exceptions"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    schedule_id: Mapped[int] = mapped_column(ForeignKey("schedules.id"), index=True)
+    starts_at: Mapped[datetime] = mapped_column(DateTime, nullable=False)
+    ends_at: Mapped[datetime] = mapped_column(DateTime, nullable=False)
+    reason: Mapped[str | None] = mapped_column(String(255), nullable=True)
+
+
+class ScheduleBlackoutWindow(Base):
+    __tablename__ = "schedule_blackout_windows"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    target: Mapped[str] = mapped_column(String(255), default="all", index=True)
+    starts_at: Mapped[datetime] = mapped_column(DateTime, nullable=False)
+    ends_at: Mapped[datetime] = mapped_column(DateTime, nullable=False)
+    reason: Mapped[str | None] = mapped_column(String(255), nullable=True)
 
 
 class Layout(Base):

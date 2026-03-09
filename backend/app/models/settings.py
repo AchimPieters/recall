@@ -1,6 +1,6 @@
 from datetime import datetime
 
-from sqlalchemy import Boolean, DateTime, Integer, String
+from sqlalchemy import Boolean, DateTime, Integer, String, UniqueConstraint
 from sqlalchemy.orm import Mapped, mapped_column
 
 from backend.app.db.database import Base
@@ -8,11 +8,22 @@ from backend.app.db.database import Base
 
 class Setting(Base):
     __tablename__ = "settings"
+    __table_args__ = (
+        UniqueConstraint(
+            "key",
+            "scope",
+            "organization_id",
+            "device_id",
+            name="uq_settings_scope_target_key",
+        ),
+    )
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
-    key: Mapped[str] = mapped_column(String(255), unique=True, index=True)
+    key: Mapped[str] = mapped_column(String(255), index=True)
     value: Mapped[str] = mapped_column(String(4096), default="")
-    organization_id: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    scope: Mapped[str] = mapped_column(String(32), default="global", index=True)
+    organization_id: Mapped[int | None] = mapped_column(Integer, nullable=True, index=True)
+    device_id: Mapped[str | None] = mapped_column(String(64), nullable=True, index=True)
     version: Mapped[int] = mapped_column(Integer, default=1)
 
 
@@ -23,7 +34,9 @@ class SettingVersion(Base):
     setting_key: Mapped[str] = mapped_column(String(255), index=True)
     setting_value: Mapped[str] = mapped_column(String(4096), default="")
     version: Mapped[int] = mapped_column(Integer)
+    scope: Mapped[str] = mapped_column(String(32), default="global", index=True)
     organization_id: Mapped[int | None] = mapped_column(Integer, nullable=True, index=True)
+    device_id: Mapped[str | None] = mapped_column(String(64), nullable=True, index=True)
     changed_by: Mapped[str] = mapped_column(String(255), default="system")
     change_reason: Mapped[str] = mapped_column(String(255), default="update")
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)

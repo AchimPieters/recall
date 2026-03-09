@@ -19,24 +19,26 @@ def test_settings_version_history_and_rollback() -> None:
 
     service.set_many(
         {"site_name": "Recall A", "timezone": "UTC"},
+        scope="global",
         organization_id=None,
         changed_by="admin",
         reason="initial",
     )
     service.set_many(
         {"site_name": "Recall B"},
+        scope="global",
         organization_id=None,
         changed_by="admin",
         reason="update",
     )
 
-    history = service.get_history("site_name")
+    history = service.get_history("site_name", scope="global")
     assert len(history) == 2
     assert history[0]["version"] == 2
     assert history[0]["setting_value"] == "Recall B"
 
     rolled = service.rollback(
-        key="site_name", target_version=1, organization_id=None, changed_by="admin"
+        key="site_name", target_version=1, scope="global", organization_id=None, changed_by="admin"
     )
     assert rolled["version"] == 3
     assert rolled["value"] == "Recall A"
