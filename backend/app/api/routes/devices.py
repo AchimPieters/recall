@@ -1,0 +1,372 @@
+from fastapi import APIRouter, Depends, HTTPException, Request
+from pydantic import BaseModel, Field
+from sqlalchemy.orm import Session
+from backend.app.core.auth import (
+    AuthUser,
+    ensure_organization_access,
+    get_current_user,
+    require_permission,
+    require_role,
+)
+from backend.app.db.database import get_db
+from backend.app.services.device_service import DeviceService
+
+router = APIRouter(prefix="/device", tags=["devices"])
+
+
+class RegisterPayload(BaseModel):
+    id: str
+    name: str = "Unnamed"
+    version: str | None = None
+
+
+class HeartbeatPayload(BaseModel):
+    id: str
+    metrics: dict | None = None
+
+
+class LogPayload(BaseModel):
+    id: str
+    level: str = "info"
+    action: str = "log"
+    message: str
+
+
+class GroupPayload(BaseModel):
+    name: str = Field(min_length=1, max_length=255)
+
+
+class GroupMemberPayload(BaseModel):
+    device_id: str = Field(min_length=1, max_length=64)
+
+
+class ScreenshotPayload(BaseModel):
+    id: str
+    image_path: str = Field(min_length=1, max_length=1024)
+
+
+
+
+class CommandEnqueuePayload(BaseModel):
+    device_id: str = Field(min_length=1, max_length=64)
+    command_type: str = Field(min_length=1, max_length=128)
+    payload: dict | None = None
+
+
+class CommandAckPayload(BaseModel):
+    id: str = Field(min_length=1, max_length=64)
+    command_id: str = Field(min_length=1, max_length=128)
+    status: str = Field(pattern="^(ok|failed|ignored)$")
+    detail: str | None = Field(default=None, max_length=1024)
+
+
+class PlaybackStatusPayload(BaseModel):
+    id: str = Field(min_length=1, max_length=64)
+    state: str = Field(pattern="^(idle|playing|paused|error)$")
+    media_id: int | None = Field(default=None, ge=1)
+    position_seconds: int | None = Field(default=None, ge=0)
+    detail: str | None = Field(default=None, max_length=1024)
+
+
+class BulkGroupActionPayload(BaseModel):
+    action: str = Field(pattern="^(reboot|update|playlist_assign|rollback)$")
+    target_version: str | None = Field(default=None, max_length=64)
+    playlist_id: int | None = Field(default=None, ge=1)
+
+
+@router.post(
+    "/register", dependencies=[Depends(require_role("device", "admin", "operator"))]
+)
+def register(
+    payload: RegisterPayload,
+    request: Request,
+    db: Session = Depends(get_db),
+    user: AuthUser = Depends(get_current_user),
+):
+    svc = DeviceService(db)
+    device = svc.register(
+        payload.id,
+        payload.name,
+        request.client.host if request.client else None,
+        payload.version,
+        user.organization_id,
+    )
+    ensure_organization_access(user, device.organization_id)
+    return {"id": device.id, "status": device.status, "last_seen": device.last_seen}
+
+
+@router.post(
+    "/heartbeat", dependencies=[Depends(require_role("device", "admin", "operator"))]
+)
+def heartbeat(
+    payload: HeartbeatPayload,
+    db: Session = Depends(get_db),
+    user: AuthUser = Depends(get_current_user),
+):
+    svc = DeviceService(db)
+    device = svc.heartbeat(payload.id, payload.metrics)
+    if not device:
+        raise HTTPException(404, "device not found")
+    ensure_organization_access(user, device.organization_id)
+    return {"status": device.status, "last_seen": device.last_seen}
+
+
+@router.get(
+    "/config", dependencies=[Depends(require_role("device", "admin", "operator"))]
+)
+def get_config(
+    device_id: str,
+    db: Session = Depends(get_db),
+    user: AuthUser = Depends(get_current_user),
+):
+    svc = DeviceService(db)
+    if user.organization_id is not None:
+        device = svc.get_device(device_id)
+        if not device or device.organization_id != user.organization_id:
+            raise HTTPException(404, "device not found")
+    return svc.get_config(device_id)
+
+
+@router.post(
+    "/logs", dependencies=[Depends(require_role("device", "admin", "operator"))]
+)
+def post_logs(
+    payload: LogPayload,
+    db: Session = Depends(get_db),
+    user: AuthUser = Depends(get_current_user),
+):
+    log = DeviceService(db).add_log(
+        payload.id, payload.level, payload.action, payload.message
+    )
+    return {"id": log.id, "timestamp": log.timestamp}
+
+
+@router.get("/logs", dependencies=[Depends(require_permission("devices:read"))])
+def list_logs(
+    limit: int = 100,
+    db: Session = Depends(get_db),
+    user: AuthUser = Depends(get_current_user),
+):
+    logs = DeviceService(db).list_logs(
+        limit=limit, organization_id=user.organization_id
+    )
+    return [
+        {
+            "id": log.id,
+            "device_id": log.device_id,
+            "level": log.level,
+            "action": log.action,
+            "message": log.message,
+            "timestamp": log.timestamp,
+        }
+        for log in logs
+    ]
+
+
+@router.post(
+    "/screenshot", dependencies=[Depends(require_role("device", "admin", "operator"))]
+)
+def post_screenshot(
+    payload: ScreenshotPayload,
+    db: Session = Depends(get_db),
+    user: AuthUser = Depends(get_current_user),
+):
+    shot = DeviceService(db).record_screenshot(
+        payload.id, payload.image_path, user.organization_id
+    )
+    return {"accepted": True, "id": shot.id, "captured_at": shot.captured_at}
+
+
+@router.get("/screenshots", dependencies=[Depends(require_permission("devices:read"))])
+def get_screenshots(
+    device_id: str | None = None,
+    db: Session = Depends(get_db),
+    user: AuthUser = Depends(get_current_user),
+):
+    return [
+        {
+            "id": shot.id,
+            "device_id": shot.device_id,
+            "image_path": shot.image_path,
+            "captured_at": shot.captured_at,
+        }
+        for shot in DeviceService(db).list_screenshots(
+            device_id=device_id, organization_id=user.organization_id
+        )
+    ]
+
+
+@router.post(
+    "/metrics", dependencies=[Depends(require_role("device", "admin", "operator"))]
+)
+def post_metrics(
+    payload: HeartbeatPayload,
+    db: Session = Depends(get_db),
+    user: AuthUser = Depends(get_current_user),
+):
+    device = DeviceService(db).heartbeat(payload.id, payload.metrics)
+    if not device:
+        raise HTTPException(404, "device not found")
+    ensure_organization_access(user, device.organization_id)
+    return {"status": "recorded"}
+
+
+
+
+
+
+@router.post(
+    "/commands/enqueue", dependencies=[Depends(require_permission("devices:write"))]
+)
+def enqueue_command(
+    payload: CommandEnqueuePayload,
+    db: Session = Depends(get_db),
+    user: AuthUser = Depends(get_current_user),
+):
+    svc = DeviceService(db)
+    device = svc.get_device(payload.device_id)
+    if not device:
+        raise HTTPException(404, "device not found")
+    ensure_organization_access(user, device.organization_id)
+    return svc.enqueue_command(
+        device_id=payload.device_id,
+        command_type=payload.command_type,
+        payload=payload.payload,
+        organization_id=user.organization_id,
+    )
+
+
+@router.get(
+    "/commands", dependencies=[Depends(require_role("device", "admin", "operator"))]
+)
+def fetch_commands(
+    device_id: str,
+    db: Session = Depends(get_db),
+    user: AuthUser = Depends(get_current_user),
+):
+    svc = DeviceService(db)
+    device = svc.get_device(device_id)
+    if not device:
+        raise HTTPException(404, "device not found")
+    ensure_organization_access(user, device.organization_id)
+    return {"device_id": device_id, "commands": svc.fetch_commands(device_id)}
+
+
+@router.post(
+    "/command-ack", dependencies=[Depends(require_role("device", "admin", "operator"))]
+)
+def command_ack(
+    payload: CommandAckPayload,
+    db: Session = Depends(get_db),
+    user: AuthUser = Depends(get_current_user),
+):
+    svc = DeviceService(db)
+    device = svc.get_device(payload.id)
+    if not device:
+        raise HTTPException(404, "device not found")
+    ensure_organization_access(user, device.organization_id)
+    updated = svc.ack_command(payload.id, payload.command_id, payload.status, payload.detail)
+    if not updated:
+        raise HTTPException(404, "command not found")
+    return updated
+
+
+@router.post(
+    "/playback-status", dependencies=[Depends(require_role("device", "admin", "operator"))]
+)
+def playback_status(
+    payload: PlaybackStatusPayload,
+    db: Session = Depends(get_db),
+    user: AuthUser = Depends(get_current_user),
+):
+    svc = DeviceService(db)
+    device = svc.get_device(payload.id)
+    if not device:
+        raise HTTPException(404, "device not found")
+    ensure_organization_access(user, device.organization_id)
+    svc.record_playback_status(
+        device_id=payload.id,
+        state=payload.state,
+        media_id=payload.media_id,
+        position_seconds=payload.position_seconds,
+        detail=payload.detail,
+    )
+    return {"status": "recorded"}
+
+
+@router.get("/list", dependencies=[Depends(require_permission("devices:read"))])
+def list_devices(
+    db: Session = Depends(get_db), user: AuthUser = Depends(get_current_user)
+):
+    svc = DeviceService(db)
+    svc.mark_presence(organization_id=user.organization_id)
+    return svc.list_devices(organization_id=user.organization_id)
+
+
+@router.post("/groups", dependencies=[Depends(require_permission("devices:write"))])
+def create_group(
+    payload: GroupPayload,
+    db: Session = Depends(get_db),
+    user: AuthUser = Depends(get_current_user),
+):
+    group = DeviceService(db).create_group(payload.name, user.organization_id)
+    return {"id": group.id, "name": group.name}
+
+
+@router.get("/groups", dependencies=[Depends(require_permission("devices:read"))])
+def list_groups(
+    db: Session = Depends(get_db), user: AuthUser = Depends(get_current_user)
+):
+    return [
+        {"id": g.id, "name": g.name}
+        for g in DeviceService(db).list_groups(organization_id=user.organization_id)
+    ]
+
+
+@router.post(
+    "/groups/{group_id}/bulk",
+    dependencies=[Depends(require_permission("devices:write"))],
+)
+def group_bulk_action(
+    group_id: int,
+    payload: BulkGroupActionPayload,
+    db: Session = Depends(get_db),
+    user: AuthUser = Depends(get_current_user),
+):
+    svc = DeviceService(db)
+    group = svc.get_group(group_id)
+    if not group:
+        raise HTTPException(status_code=404, detail="group not found")
+    ensure_organization_access(user, group.organization_id)
+
+    try:
+        result = svc.execute_group_action(
+            group_id=group_id,
+            action=payload.action,
+            actor=user.username,
+            organization_id=user.organization_id,
+            target_version=payload.target_version,
+            playlist_id=payload.playlist_id,
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    return result
+
+
+@router.post(
+    "/groups/{group_id}/members",
+    dependencies=[Depends(require_permission("devices:write"))],
+)
+def add_group_member(
+    group_id: int,
+    payload: GroupMemberPayload,
+    db: Session = Depends(get_db),
+    user: AuthUser = Depends(get_current_user),
+):
+    svc = DeviceService(db)
+    group = svc.get_group(group_id)
+    if not group:
+        raise HTTPException(status_code=404, detail="group not found")
+    ensure_organization_access(user, group.organization_id)
+    member = svc.assign_group_member(group_id, payload.device_id)
+    return {"id": member.id, "group_id": member.group_id, "device_id": member.device_id}
