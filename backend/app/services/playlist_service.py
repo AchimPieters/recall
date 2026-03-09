@@ -10,6 +10,8 @@ from backend.app.models.media import (
     PlaylistItem,
     PlaylistRule,
     Schedule,
+    Zone,
+    ZonePlaylistAssignment,
 )
 
 
@@ -216,3 +218,63 @@ class PlaylistService:
                 return {"playlist_id": first.playlist_id, "source": "group_assignment", "fallback": bool(first.is_fallback)}
 
         return {"playlist_id": None, "source": "none"}
+
+
+    def add_zone(
+        self,
+        *,
+        layout_id: int,
+        name: str,
+        x: int = 0,
+        y: int = 0,
+        width: int = 1920,
+        height: int = 1080,
+    ) -> Zone:
+        zone = Zone(layout_id=layout_id, name=name, x=x, y=y, width=width, height=height)
+        self.db.add(zone)
+        self.db.commit()
+        self.db.refresh(zone)
+        return zone
+
+    def assign_zone_playlist(self, *, zone_id: int, playlist_id: int) -> ZonePlaylistAssignment:
+        assignment = self.db.query(ZonePlaylistAssignment).filter(ZonePlaylistAssignment.zone_id == zone_id).first()
+        if assignment:
+            assignment.playlist_id = playlist_id
+        else:
+            assignment = ZonePlaylistAssignment(zone_id=zone_id, playlist_id=playlist_id)
+            self.db.add(assignment)
+        self.db.commit()
+        self.db.refresh(assignment)
+        return assignment
+
+    def get_layout_preview(self, layout_id: int) -> dict:
+        layout = self.db.query(Layout).filter(Layout.id == layout_id).first()
+        if not layout:
+            return {"layout": None, "zones": []}
+
+        zones = self.db.query(Zone).filter(Zone.layout_id == layout_id).order_by(Zone.id.asc()).all()
+        zone_ids = [z.id for z in zones]
+        assignments = {}
+        if zone_ids:
+            for row in self.db.query(ZonePlaylistAssignment).filter(ZonePlaylistAssignment.zone_id.in_(zone_ids)).all():
+                assignments[row.zone_id] = row.playlist_id
+
+        return {
+            "layout": {
+                "id": layout.id,
+                "name": layout.name,
+                "definition_json": layout.definition_json,
+            },
+            "zones": [
+                {
+                    "id": z.id,
+                    "name": z.name,
+                    "x": z.x,
+                    "y": z.y,
+                    "width": z.width,
+                    "height": z.height,
+                    "playlist_id": assignments.get(z.id),
+                }
+                for z in zones
+            ],
+        }

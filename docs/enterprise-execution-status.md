@@ -21,7 +21,7 @@ Nee. Niet alle 27 stappen zijn volledig doorlopen en afgerond.
 | 10 | Veilige schaalbare mediapipeline | ⚠️ Gedeeltelijk | Duplicate-detectie op checksum en media-version registratie zijn toegevoegd in `MediaService`; volledige async workers/transcoding/storage abstraction blijft open. |
 | 11 | Echte playlist engine | ⚠️ Gedeeltelijk | Playlist assignments, rules en device resolver met schedule-precedence + fallback zijn toegevoegd incl. tests; contenttype/transition- en volledige enterprise UX-flow blijft open. |
 | 12 | Scheduling engine | ⚠️ Gedeeltelijk | Priority-aware schedule resolver en preview endpoint zijn toegevoegd; recurrence-uitzonderingen/blackout windows en volledige planner-UX blijven open. |
-| 13 | Layouts en zones | ⚠️ Gedeeltelijk | Layoutcomponenten bestaan; volledige multi-zone end-to-end (UI+agent) moet verder worden aangetoond/uitgebouwd. |
+| 13 | Layouts en zones | ⚠️ Gedeeltelijk | Zone CRUD, zone→playlist assignment en layout preview-endpoint zijn toegevoegd in backend incl. tests; frontend preview en agent zone-based playback blijven open. |
 | 14 | Fleet management | ⚠️ Gedeeltelijk | Device groups/bulkacties aanwezig, maar complete enterprise fleet-UX en provisioning flow nog niet volledig af. |
 | 15 | Alerting + incidentdetectie | ⚠️ Gedeeltelijk | Alerts aanwezig; complete rule engine, severity-lifecycle en notificatiekanalen moeten verder worden uitgebreid. |
 | 16 | Asynchrone workers | ⚠️ Gedeeltelijk | Celery/Redis fundament aanwezig; volledige taakset, retry/failed-job zichtbaarheid en operational maturity uitbreiden. |

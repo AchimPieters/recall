@@ -47,6 +47,18 @@ class LayoutPayload(BaseModel):
     definition_json: str = Field(min_length=2, max_length=16384)
 
 
+class ZonePayload(BaseModel):
+    name: str = Field(min_length=1, max_length=255)
+    x: int = 0
+    y: int = 0
+    width: int = 1920
+    height: int = 1080
+
+
+class ZonePlaylistPayload(BaseModel):
+    playlist_id: int = Field(ge=1)
+
+
 @router.post("", dependencies=[Depends(require_permission("playlists:write"))])
 def create_playlist(payload: PlaylistCreatePayload, db: Session = Depends(get_db)):
     playlist = PlaylistService(db).create_playlist(payload.name)
@@ -196,6 +208,43 @@ def create_layout(payload: LayoutPayload, db: Session = Depends(get_db)):
         "name": layout.name,
         "definition_json": layout.definition_json,
     }
+
+
+
+
+@router.post("/layouts/{layout_id}/zones", dependencies=[Depends(require_permission("playlists:write"))])
+def add_zone(layout_id: int, payload: ZonePayload, db: Session = Depends(get_db)):
+    zone = PlaylistService(db).add_zone(
+        layout_id=layout_id,
+        name=payload.name,
+        x=payload.x,
+        y=payload.y,
+        width=payload.width,
+        height=payload.height,
+    )
+    return {
+        "id": zone.id,
+        "layout_id": zone.layout_id,
+        "name": zone.name,
+        "x": zone.x,
+        "y": zone.y,
+        "width": zone.width,
+        "height": zone.height,
+    }
+
+
+@router.post("/zones/{zone_id}/playlist", dependencies=[Depends(require_permission("playlists:write"))])
+def assign_zone_playlist(zone_id: int, payload: ZonePlaylistPayload, db: Session = Depends(get_db)):
+    assignment = PlaylistService(db).assign_zone_playlist(zone_id=zone_id, playlist_id=payload.playlist_id)
+    return {"id": assignment.id, "zone_id": assignment.zone_id, "playlist_id": assignment.playlist_id}
+
+
+@router.get("/layouts/{layout_id}/preview", dependencies=[Depends(require_permission("playlists:read"))])
+def layout_preview(layout_id: int, db: Session = Depends(get_db)):
+    preview = PlaylistService(db).get_layout_preview(layout_id)
+    if preview["layout"] is None:
+        raise HTTPException(status_code=404, detail="layout not found")
+    return preview
 
 
 @router.get("/layouts", dependencies=[Depends(require_permission("playlists:read"))])

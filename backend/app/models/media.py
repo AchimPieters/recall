@@ -109,3 +109,12 @@ class PlaylistRule(Base):
     rule_type: Mapped[str] = mapped_column(String(64), nullable=False)
     rule_value: Mapped[str] = mapped_column(String(1024), nullable=False)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=utc_now)
+
+
+class ZonePlaylistAssignment(Base):
+    __tablename__ = "zone_playlist_assignments"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    zone_id: Mapped[int] = mapped_column(ForeignKey("zones.id"), unique=True, index=True)
+    playlist_id: Mapped[int] = mapped_column(ForeignKey("playlists.id"), index=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=utc_now)
