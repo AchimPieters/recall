@@ -16,9 +16,13 @@ class PlaylistCreatePayload(BaseModel):
 
 
 class PlaylistItemPayload(BaseModel):
-    media_id: int
+    media_id: int | None = None
+    content_type: str = Field(default="image", pattern="^(image|video|web_url|widget)$")
+    source_url: str | None = Field(default=None, max_length=1024)
+    widget_config: str | None = Field(default=None, max_length=4096)
     position: int | None = None
     duration_seconds: int | None = None
+    transition_seconds: int | None = None
 
 
 class PlaylistAssignmentPayload(BaseModel):
@@ -40,6 +44,21 @@ class SchedulePayload(BaseModel):
     recurrence: str | None = Field(default=None, max_length=128)
     priority: int = Field(default=100, ge=1, le=10000)
     timezone: str = Field(default="UTC", min_length=1, max_length=64)
+
+
+
+
+class ScheduleExceptionPayload(BaseModel):
+    starts_at: datetime
+    ends_at: datetime
+    reason: str | None = Field(default=None, max_length=255)
+
+
+class BlackoutWindowPayload(BaseModel):
+    target: str = Field(default="all", min_length=1, max_length=255)
+    starts_at: datetime
+    ends_at: datetime
+    reason: str | None = Field(default=None, max_length=255)
 
 
 class LayoutPayload(BaseModel):
@@ -79,18 +98,29 @@ def add_item(
     playlist_id: int, payload: PlaylistItemPayload, db: Session = Depends(get_db)
 ):
     svc = PlaylistService(db)
-    item = svc.add_item(
-        playlist_id,
-        payload.media_id,
-        payload.position,
-        payload.duration_seconds,
-    )
+    try:
+        item = svc.add_item(
+            playlist_id,
+            payload.media_id,
+            payload.position,
+            payload.duration_seconds,
+            payload.content_type,
+            payload.source_url,
+            payload.widget_config,
+            payload.transition_seconds,
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
     return {
         "id": item.id,
         "playlist_id": item.playlist_id,
         "media_id": item.media_id,
+        "content_type": item.content_type,
+        "source_url": item.source_url,
+        "widget_config": item.widget_config,
         "position": item.position,
         "duration_seconds": item.duration_seconds,
+        "transition_seconds": item.transition_seconds,
     }
 
 
@@ -147,8 +177,12 @@ def get_items(playlist_id: int, db: Session = Depends(get_db)):
             "id": i.id,
             "playlist_id": i.playlist_id,
             "media_id": i.media_id,
+            "content_type": i.content_type,
+            "source_url": i.source_url,
+            "widget_config": i.widget_config,
             "position": i.position,
             "duration_seconds": i.duration_seconds,
+            "transition_seconds": i.transition_seconds,
         }
         for i in items
     ]
@@ -187,6 +221,64 @@ def schedule_playlist(
     }
 
 
+
+
+
+
+@router.post(
+    "/schedules/{schedule_id}/exceptions",
+    dependencies=[Depends(require_permission("playlists:write"))],
+)
+def add_schedule_exception(
+    schedule_id: int,
+    payload: ScheduleExceptionPayload,
+    db: Session = Depends(get_db),
+):
+    try:
+        row = PlaylistService(db).add_schedule_exception(
+            schedule_id=schedule_id,
+            starts_at=payload.starts_at,
+            ends_at=payload.ends_at,
+            reason=payload.reason,
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    return {
+        "id": row.id,
+        "schedule_id": row.schedule_id,
+        "starts_at": row.starts_at,
+        "ends_at": row.ends_at,
+        "reason": row.reason,
+    }
+
+
+@router.post(
+    "/schedules/blackouts",
+    dependencies=[Depends(require_permission("playlists:write"))],
+)
+def add_blackout_window(payload: BlackoutWindowPayload, db: Session = Depends(get_db)):
+    try:
+        row = PlaylistService(db).add_blackout_window(
+            target=payload.target,
+            starts_at=payload.starts_at,
+            ends_at=payload.ends_at,
+            reason=payload.reason,
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    return {
+        "id": row.id,
+        "target": row.target,
+        "starts_at": row.starts_at,
+        "ends_at": row.ends_at,
+        "reason": row.reason,
+    }
+
+
+@router.post("/resolve/at", dependencies=[Depends(require_permission("playlists:read"))])
+def resolve_at(target: str, at: datetime, db: Session = Depends(get_db)):
+    playlist_id = PlaylistService(db).resolve_active_playlist_id_at(target, at)
+    return {"target": target, "at": at, "playlist_id": playlist_id}
 
 
 @router.get("/resolve/preview", dependencies=[Depends(require_permission("playlists:read"))])

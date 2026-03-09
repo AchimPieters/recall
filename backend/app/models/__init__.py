@@ -5,11 +5,13 @@ from backend.app.models.device import (
     DeviceGroupMember,
     DeviceLog,
     DeviceScreenshot,
+    DeviceTag,
+    DeviceTagLink,
 )
 from backend.app.models.event import Event
-from backend.app.models.media import Layout, Media, MediaVersion, Playlist, PlaylistAssignment, PlaylistItem, PlaylistRule, Schedule, Zone, ZonePlaylistAssignment
+from backend.app.models.media import Layout, Media, MediaVersion, Playlist, PlaylistAssignment, PlaylistItem, PlaylistRule, Schedule, ScheduleBlackoutWindow, ScheduleException, Zone, ZonePlaylistAssignment
 from backend.app.models.settings import Organization, Setting, SettingVersion, User
-from backend.app.models.security import AuditLog, RefreshToken, SecurityAuditEvent
+from backend.app.models.security import AuditLog, PasswordResetToken, RefreshToken, SecurityAuditEvent
 
 __all__ = [
     "Alert",
@@ -18,6 +20,8 @@ __all__ = [
     "DeviceGroupMember",
     "DeviceLog",
     "DeviceScreenshot",
+    "DeviceTag",
+    "DeviceTagLink",
     "Event",
     "Layout",
     "Media",
@@ -27,6 +31,8 @@ __all__ = [
     "PlaylistItem",
     "PlaylistRule",
     "Schedule",
+    "ScheduleException",
+    "ScheduleBlackoutWindow",
     "Zone",
     "ZonePlaylistAssignment",
     "Setting",
@@ -35,5 +41,6 @@ __all__ = [
     "Organization",
     "AuditLog",
     "RefreshToken",
+    "PasswordResetToken",
     "SecurityAuditEvent",
 ]

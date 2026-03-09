@@ -1,6 +1,7 @@
 from datetime import datetime, timedelta, timezone
 from uuid import uuid4
 from sqlalchemy.orm import Session
+from backend.app.core.auth import enforce_role_permission
 from backend.app.core.config import get_settings
 from backend.app.models.device import (
     Alert,
@@ -9,6 +10,8 @@ from backend.app.models.device import (
     DeviceGroupMember,
     DeviceLog,
     DeviceScreenshot,
+    DeviceTag,
+    DeviceTagLink,
 )
 from backend.app.services.playlist_service import PlaylistService
 from backend.app.services.event_service import EventService
@@ -42,6 +45,7 @@ class DeviceService:
         ip: str | None,
         version: str | None,
         organization_id: int | None,
+        capabilities: dict | None = None,
     ) -> Device:
         device = self.db.query(Device).filter(Device.id == device_id).first()
         if not device:
@@ -52,6 +56,8 @@ class DeviceService:
             device.organization_id = organization_id
         device.ip = ip
         device.version = version
+        if capabilities is not None:
+            device.capabilities = capabilities
         device.last_seen = self._utc_now()
         self.db.commit()
         self.db.refresh(device)
@@ -62,7 +68,11 @@ class DeviceService:
         if not device:
             return None
         device.last_seen = self._utc_now()
-        device.status = "online"
+        metric_state = str((metrics or {}).get("state", "")).lower() if metrics else ""
+        if metric_state == "error":
+            device.status = "error"
+        else:
+            device.status = "online"
         device.metrics = metrics
         self.db.commit()
         self.db.refresh(device)
@@ -72,12 +82,15 @@ class DeviceService:
         return self.db.query(Device).filter(Device.id == device_id).first()
 
     def get_config(self, device_id: str) -> dict:
-        playlist_id = PlaylistService(self.db).resolve_active_playlist_id(device_id)
+        playlist_service = PlaylistService(self.db)
+        playlist_id = playlist_service.resolve_active_playlist_id(device_id)
+        zone_plan = playlist_service.resolve_zone_playback_plan(device_id)
         return {
             "device_id": device_id,
             "heartbeat_interval": 30,
             "fallback_content": "default",
             "active_playlist_id": playlist_id,
+            "zone_plan": zone_plan,
         }
 
     def add_log(
@@ -111,12 +124,15 @@ class DeviceService:
         now = self._utc_now()
         changed = 0
         for device in devices:
+            age = now - (self._normalize(device.last_seen) or now) if device.last_seen else None
             if not device.last_seen:
                 new_status = "stale"
-            elif now - (self._normalize(device.last_seen) or now) > timedelta(
-                seconds=settings.heartbeat_timeout_seconds
-            ):
+            elif age and age > timedelta(seconds=settings.heartbeat_timeout_seconds):
                 new_status = "offline"
+            elif age and age > timedelta(seconds=max(5, settings.heartbeat_timeout_seconds // 2)):
+                new_status = "stale"
+            elif device.status == "error":
+                new_status = "error"
             else:
                 new_status = "online"
             if device.status != new_status:
@@ -132,13 +148,43 @@ class DeviceService:
         self.db.commit()
         return changed
 
-    def list_devices(self, organization_id: int | None = None) -> list[Device]:
+    def list_devices(
+        self,
+        organization_id: int | None = None,
+        status: str | None = None,
+        group_id: int | None = None,
+        tag: str | None = None,
+        version: str | None = None,
+        last_seen_before: datetime | None = None,
+    ) -> list[Device]:
         query = self.db.query(Device)
         if organization_id is not None:
             query = query.filter(Device.organization_id == organization_id)
-        return query.all()
+        if status:
+            query = query.filter(Device.status == status)
+        if version:
+            query = query.filter(Device.version == version)
+        if last_seen_before is not None:
+            query = query.filter(Device.last_seen <= last_seen_before)
+        if group_id is not None:
+            query = query.join(DeviceGroupMember, DeviceGroupMember.device_id == Device.id).filter(
+                DeviceGroupMember.group_id == group_id
+            )
+        if tag:
+            query = query.join(DeviceTagLink, DeviceTagLink.device_id == Device.id).join(
+                DeviceTag, DeviceTag.id == DeviceTagLink.tag_id
+            ).filter(DeviceTag.name == tag)
+        return query.order_by(Device.id.asc()).all()
 
-    def create_group(self, name: str, organization_id: int | None) -> DeviceGroup:
+    def create_group(
+        self,
+        name: str,
+        organization_id: int | None,
+        actor_role: str | None = None,
+    ) -> DeviceGroup:
+        if actor_role is not None:
+            enforce_role_permission(actor_role, "devices.write")
+
         existing = (
             self.db.query(DeviceGroup)
             .filter(
@@ -164,7 +210,15 @@ class DeviceService:
     def get_group(self, group_id: int) -> DeviceGroup | None:
         return self.db.query(DeviceGroup).filter(DeviceGroup.id == group_id).first()
 
-    def assign_group_member(self, group_id: int, device_id: str) -> DeviceGroupMember:
+    def assign_group_member(
+        self,
+        group_id: int,
+        device_id: str,
+        actor_role: str | None = None,
+    ) -> DeviceGroupMember:
+        if actor_role is not None:
+            enforce_role_permission(actor_role, "devices.write")
+
         existing = (
             self.db.query(DeviceGroupMember)
             .filter(
@@ -196,7 +250,11 @@ class DeviceService:
         organization_id: int | None,
         target_version: str | None = None,
         playlist_id: int | None = None,
+        actor_role: str | None = None,
     ) -> dict:
+        if actor_role is not None:
+            enforce_role_permission(actor_role, "devices.manage")
+
         valid_actions = {"reboot", "update", "playlist_assign", "rollback"}
         if action not in valid_actions:
             raise ValueError("unsupported action")
@@ -285,6 +343,38 @@ class DeviceService:
             .limit(100)
             .all()
         )
+
+    def create_tag(self, name: str, organization_id: int | None) -> DeviceTag:
+        existing = (
+            self.db.query(DeviceTag)
+            .filter(DeviceTag.name == name, DeviceTag.organization_id == organization_id)
+            .first()
+        )
+        if existing:
+            return existing
+        tag = DeviceTag(name=name, organization_id=organization_id)
+        self.db.add(tag)
+        self.db.commit()
+        self.db.refresh(tag)
+        return tag
+
+    def list_tags(self, organization_id: int | None = None) -> list[DeviceTag]:
+        query = self.db.query(DeviceTag)
+        if organization_id is not None:
+            query = query.filter(DeviceTag.organization_id == organization_id)
+        return query.order_by(DeviceTag.name.asc()).all()
+
+    def assign_tag(self, device_id: str, tag_name: str, organization_id: int | None) -> dict:
+        tag = self.create_tag(tag_name, organization_id)
+        existing = (
+            self.db.query(DeviceTagLink)
+            .filter(DeviceTagLink.device_id == device_id, DeviceTagLink.tag_id == tag.id)
+            .first()
+        )
+        if not existing:
+            self.db.add(DeviceTagLink(device_id=device_id, tag_id=tag.id))
+            self.db.commit()
+        return {"device_id": device_id, "tag_id": tag.id, "tag_name": tag.name}
 
     def create_alert(
         self, level: str, source: str, message: str, organization_id: int | None

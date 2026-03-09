@@ -18,6 +18,7 @@ class Device(Base):
     ip: Mapped[str | None] = mapped_column(String(64), nullable=True)
     version: Mapped[str | None] = mapped_column(String(64), nullable=True)
     metrics: Mapped[dict | None] = mapped_column(JSON, nullable=True)
+    capabilities: Mapped[dict | None] = mapped_column(JSON, nullable=True)
     organization_id: Mapped[int | None] = mapped_column(
         ForeignKey("organizations.id"), nullable=True
     )
@@ -59,6 +60,23 @@ class DeviceGroupMember(Base):
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
     group_id: Mapped[int] = mapped_column(ForeignKey("device_groups.id"), index=True)
     device_id: Mapped[str] = mapped_column(ForeignKey("devices.id"), index=True)
+
+
+
+
+class DeviceTag(Base):
+    __tablename__ = "device_tags"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    organization_id: Mapped[int | None] = mapped_column(Integer, nullable=True, index=True)
+    name: Mapped[str] = mapped_column(String(128), nullable=False)
+
+
+class DeviceTagLink(Base):
+    __tablename__ = "device_tag_links"
+
+    device_id: Mapped[str] = mapped_column(ForeignKey("devices.id"), primary_key=True)
+    tag_id: Mapped[int] = mapped_column(ForeignKey("device_tags.id"), primary_key=True)
 
 
 class Alert(Base):

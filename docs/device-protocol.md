@@ -83,3 +83,29 @@ Payload:
 - `403` missing role/permission
 - `404` unknown device/command
 - `422` payload contract invalid
+
+
+### Register payload contract (v1)
+```json
+{
+  "id": "device-001",
+  "name": "Lobby Screen",
+  "version": "2.1.0",
+  "capabilities": {
+    "os": "linux",
+    "hardware_type": "rpi",
+    "display_outputs": 1,
+    "cpu": "armv8",
+    "memory_mb": 2048,
+    "resolution": "1920x1080",
+    "agent_version": "2.1.0",
+    "connectivity": "ethernet"
+  }
+}
+```
+
+### Heartbeat status policy
+- `online`: heartbeat binnen de eerste helft van `HEARTBEAT_TIMEOUT`.
+- `stale`: heartbeat ouder dan de helft van `HEARTBEAT_TIMEOUT` maar nog niet verlopen.
+- `offline`: heartbeat ouder dan `HEARTBEAT_TIMEOUT`.
+- `error`: device rapporteert expliciet `metrics.state=error` (bijv. playback failure).
