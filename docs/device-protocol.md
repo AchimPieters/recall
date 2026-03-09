@@ -1,130 +1,85 @@
-# Device Protocol (v2)
+# Device Protocol v1
 
-Dit document beschrijft het actuele device/server contract voor Recall v2.
+Dit document definieert het formele, versioned device protocol tussen player-agent en backend.
 
-## Authenticatie
+## Versioning
+- Huidige protocolversie: `v1`.
+- Canonieke prefix: `/api/v1/device/*`.
+- Legacy compat-prefix zonder `/api/v1` blijft tijdelijk ondersteund tijdens migratie.
 
-- Devices authenticeren met een JWT met rol `device`.
-- Beheerders (`admin`/`operator`) mogen dezelfde endpoints gebruiken voor troubleshooting.
-- Authorization header: `Authorization: Bearer <token>`.
+## Device capability contract
+Bij `register` rapporteert de agent minimaal:
+- `id`, `name`, `version`
 
-## Lifecycle
+Optioneel capability-profiel (`capabilities`) met:
+- `os`
+- `hardware_type`
+- `display_outputs`
+- `cpu`
+- `memory_mb`
+- `resolution`
+- `agent_version`
+- `connectivity`
 
-- Devices sturen iedere ~30s een heartbeat.
-- `HEARTBEAT_TIMEOUT` (default 90s) bepaalt wanneer een device als `offline` wordt gemarkeerd.
-- Statuswaarden in platform: `online`, `offline`, `stale`, `error`.
+## Device status derivatie
+Server-status wordt afgeleid op basis van heartbeat/telemetry:
+- `online`: recente heartbeat
+- `stale`: heartbeat vertraagd
+- `offline`: heartbeat timeout overschreden
+- `error`: expliciete foutstatus of kritieke playback error
 
-## Endpoints
+## Endpoints (v1)
 
-Base path: `/device`
+### 1. Register
+`POST /api/v1/device/register`
 
-### 1) Register
+### 2. Heartbeat
+`POST /api/v1/device/heartbeat`
 
-`POST /device/register`
+### 3. Metrics push
+`POST /api/v1/device/metrics`
 
-Request:
+### 4. Logs push
+`POST /api/v1/device/logs`
 
+### 5. Screenshot upload
+`POST /api/v1/device/screenshot`
+
+### 6. Config fetch
+`GET /api/v1/device/config?device_id=<id>`
+
+### 7. Command fetch
+`GET /api/v1/device/commands?device_id=<id>`
+
+### 8. Command ack
+`POST /api/v1/device/command-ack`
+
+Payload:
 ```json
 {
   "id": "device-001",
-  "name": "Lobby Display",
-  "version": "1.4.2"
+  "command_id": "cmd-123",
+  "status": "ok",
+  "detail": "completed"
 }
 ```
 
-Response:
+### 9. Playback status
+`POST /api/v1/device/playback-status`
 
+Payload:
 ```json
 {
   "id": "device-001",
-  "status": "online",
-  "last_seen": "2026-03-08T10:00:00Z"
+  "state": "playing",
+  "media_id": 10,
+  "position_seconds": 12,
+  "detail": "normal"
 }
 ```
 
-### 2) Heartbeat
-
-`POST /device/heartbeat`
-
-Request:
-
-```json
-{
-  "id": "device-001",
-  "metrics": {
-    "cpu": 0.34,
-    "mem": 0.58
-  }
-}
-```
-
-Response:
-
-```json
-{
-  "status": "online",
-  "last_seen": "2026-03-08T10:00:30Z"
-}
-```
-
-### 3) Metrics upload
-
-`POST /device/metrics`
-
-Request payload is gelijk aan heartbeat en wordt opgeslagen als device metrics.
-
-### 4) Log upload
-
-`POST /device/logs`
-
-Request:
-
-```json
-{
-  "id": "device-001",
-  "level": "error",
-  "action": "playback",
-  "message": "Failed to decode media asset 8f..."
-}
-```
-
-### 5) Screenshot upload
-
-`POST /device/screenshot`
-
-Request:
-
-```json
-{
-  "id": "device-001",
-  "image_path": "screenshots/device-001/latest.png"
-}
-```
-
-### 6) Config ophalen
-
-`GET /device/config?device_id=device-001`
-
-Response bevat actuele device-configuratie plus toegewezen playlist/settings.
-
-### 7) Fleet beheer
-
-- `GET /device/list`
-- `GET /device/logs`
-- `GET /device/screenshots`
-- `POST /device/groups`
-- `GET /device/groups`
-- `POST /device/groups/{group_id}/members`
-
-## Foutcodes
-
-- `401`: token ontbreekt of ongeldig.
-- `403`: rol/permissie ontbreekt.
-- `404`: onbekend device of resource.
-- `422`: payload-validatie mislukt.
-
-## Security vereisten
-
-- JWT secret via environment variables.
-- Request logging + audit events op kritieke mutaties.
-- Upload paden worden server-side gevalideerd.
+## Error semantics
+- `401` invalid/missing token
+- `403` missing role/permission
+- `404` unknown device/command
+- `422` payload contract invalid

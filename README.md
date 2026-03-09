@@ -12,7 +12,8 @@ Recall is a production-oriented digital signage platform with an enterprise migr
 See the detailed architecture blueprint in [`docs/architecture.md`](docs/architecture.md).
 
 ## Repository overview (current + target)
-- `recall-server/`: current backend/runtime.
+- `backend/`: enterprise backend runtime (target path).
+- `recall-server/`: legacy backend/runtime (compat path during migration).
 - `recall-player/`: current agent runtime.
 - `docs/`: architecture, API, security, deployment and runbooks.
 - `docs/recall-v2-enterprise-structure.md`: target v2 directory architecture.
@@ -21,8 +22,7 @@ See the detailed architecture blueprint in [`docs/architecture.md`](docs/archite
 ## Development quick start
 ```bash
 python -m pip install -r recall-server/requirements.txt
-cd recall-server
-uvicorn recall.api.main:app --host 0.0.0.0 --port 8000
+uvicorn backend.app.api.main:app --host 0.0.0.0 --port 8000
 ```
 
 ## Configuration
