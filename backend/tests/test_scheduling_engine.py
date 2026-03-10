@@ -1,5 +1,6 @@
 from datetime import datetime, timedelta, timezone
 
+import pytest
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 
@@ -96,3 +97,47 @@ def test_blackout_window_blocks_resolution() -> None:
     )
 
     assert svc.resolve_active_playlist_id_at("dev-b", now) is None
+
+
+def test_schedule_recurrence_rejects_invalid_values() -> None:
+    db = _db_session()
+    svc = PlaylistService(db)
+
+    p = svc.create_playlist("Invalid recurrence")
+    svc.add_item(p.id, media_id=6, content_type="image")
+
+    with pytest.raises(ValueError, match="unsupported recurrence"):
+        svc.schedule_playlist(
+            p.id,
+            target="dev-r",
+            starts_at=None,
+            ends_at=None,
+            recurrence="monthly",
+        )
+
+    with pytest.raises(ValueError, match="values 0-6"):
+        svc.schedule_playlist(
+            p.id,
+            target="dev-r",
+            starts_at=None,
+            ends_at=None,
+            recurrence="weekdays:7",
+        )
+
+
+def test_schedule_recurrence_weekdays_is_normalized() -> None:
+    db = _db_session()
+    svc = PlaylistService(db)
+
+    p = svc.create_playlist("Normalized recurrence")
+    svc.add_item(p.id, media_id=7, content_type="image")
+
+    sched = svc.schedule_playlist(
+        p.id,
+        target="dev-n",
+        starts_at=None,
+        ends_at=None,
+        recurrence="weekdays:5,1,1",
+    )
+
+    assert sched.recurrence == "weekdays:1,5"

@@ -51,3 +51,50 @@ def test_device_scope_requires_target() -> None:
             organization_id=10,
             changed_by="admin",
         )
+
+
+def test_global_scope_rejects_org_or_device_target() -> None:
+    db = _db_session()
+    svc = SettingsService(db)
+
+    with pytest.raises(ValueError, match="Global settings cannot target"):
+        svc.set_many(
+            {"site_name": "BadGlobal"},
+            scope="global",
+            organization_id=10,
+            changed_by="admin",
+        )
+
+    with pytest.raises(ValueError, match="Global settings cannot target"):
+        svc.set_many(
+            {"site_name": "BadGlobal"},
+            scope="global",
+            device_id="dev-x",
+            changed_by="admin",
+        )
+
+
+def test_organization_scope_rejects_device_target() -> None:
+    db = _db_session()
+    svc = SettingsService(db)
+
+    with pytest.raises(ValueError, match="cannot target device_id"):
+        svc.set_many(
+            {"site_name": "OrgBad"},
+            scope="organization",
+            organization_id=10,
+            device_id="dev-x",
+            changed_by="admin",
+        )
+
+
+def test_invalid_scope_is_rejected() -> None:
+    db = _db_session()
+    svc = SettingsService(db)
+
+    with pytest.raises(ValueError, match="Unsupported settings scope"):
+        svc.set_many(
+            {"site_name": "BadScope"},
+            scope="tenant",
+            changed_by="admin",
+        )

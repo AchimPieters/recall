@@ -9,7 +9,7 @@ from backend.app.db.database import get_db
 from backend.app.models.settings import User
 
 settings = get_settings()
-oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/token")
+oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/api/v1/token")
 
 ROLE_PERMISSIONS: dict[str, set[str]] = {
     "superadmin": {
@@ -117,7 +117,7 @@ def ensure_organization_access(user: AuthUser, organization_id: int | None) -> N
     if user.role in {"admin", "superadmin"} and user.organization_id is None:
         return
     if user.organization_id is None:
-        return
+        raise HTTPException(status_code=403, detail="Organization context required")
     if organization_id is None or organization_id != user.organization_id:
         raise HTTPException(status_code=403, detail="Cross-organization access denied")
 

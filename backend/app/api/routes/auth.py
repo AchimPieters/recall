@@ -112,6 +112,30 @@ def _clear_failed_logins(username: str) -> None:
         failed_login_attempts.pop(username, None)
 
 
+def _write_auth_audit(
+    sec_repo: SecurityRepository,
+    *,
+    actor_id: str,
+    action: str,
+    resource_type: str,
+    resource_id: str | None,
+    ip_address: str | None,
+    before_state: str | None = None,
+    after_state: str | None = None,
+) -> None:
+    sec_repo.add_audit_log(
+        actor_type="user",
+        actor_id=actor_id,
+        organization_id=None,
+        action=action,
+        resource_type=resource_type,
+        resource_id=resource_id,
+        before_state=before_state,
+        after_state=after_state,
+        ip_address=ip_address,
+    )
+
+
 @router.post("/token")
 @router.post("/auth/login")
 @limiter.limit("10/minute")
@@ -272,6 +296,14 @@ def logout(
         detail="Refresh token revoked",
         ip_address=client_ip,
     )
+    _write_auth_audit(
+        sec_repo,
+        actor_id=subject,
+        action="auth.logout",
+        resource_type="refresh_token",
+        resource_id=hash_token(jti),
+        ip_address=client_ip,
+    )
     return {"status": "logged_out"}
 
 
@@ -283,11 +315,21 @@ def logout_all(
 ):
     sec_repo = SecurityRepository(db)
     revoked = sec_repo.revoke_all_refresh_tokens_for_user(user.username)
+    client_ip = request.client.host if request.client else None
     sec_repo.add_security_event(
         actor=user.username,
         event_type="logout_all",
         detail=f"revoked_tokens={revoked}",
-        ip_address=request.client.host if request.client else None,
+        ip_address=client_ip,
+    )
+    _write_auth_audit(
+        sec_repo,
+        actor_id=user.username,
+        action="auth.logout_all",
+        resource_type="refresh_token",
+        resource_id=user.username,
+        ip_address=client_ip,
+        after_state=str(revoked),
     )
     return {"status": "logged_out_all", "revoked_tokens": revoked}
 
@@ -326,7 +368,18 @@ def request_password_reset(
         detail="Password reset token issued",
         ip_address=client_ip,
     )
-    return {"status": "accepted", "reset_token": raw_token}
+    _write_auth_audit(
+        sec_repo,
+        actor_id=username,
+        action="auth.password_reset.request",
+        resource_type="password_reset_token",
+        resource_id=username,
+        ip_address=client_ip,
+    )
+    response = {"status": "accepted"}
+    if settings_conf.environment == "dev":
+        response["reset_token"] = raw_token
+    return response
 
 
 @router.post("/auth/password-reset/confirm")
@@ -374,6 +427,14 @@ def confirm_password_reset(
         detail="Password updated and sessions revoked",
         ip_address=client_ip,
     )
+    _write_auth_audit(
+        sec_repo,
+        actor_id=user.username,
+        action="auth.password_reset.confirm",
+        resource_type="user",
+        resource_id=user.username,
+        ip_address=client_ip,
+    )
     return {"status": "password_updated"}
 
 
@@ -390,11 +451,22 @@ def activate_user(
 
     user.is_active = payload.active
     db.commit()
-    SecurityRepository(db).add_security_event(
+    sec_repo = SecurityRepository(db)
+    client_ip = request.client.host if request.client else None
+    sec_repo.add_security_event(
         actor=actor.username,
         event_type="user_activation_changed",
         detail=f"target={user.username},active={payload.active}",
-        ip_address=request.client.host if request.client else None,
+        ip_address=client_ip,
+    )
+    _write_auth_audit(
+        sec_repo,
+        actor_id=actor.username,
+        action="auth.activate",
+        resource_type="user",
+        resource_id=user.username,
+        ip_address=client_ip,
+        after_state=str(payload.active),
     )
     return {"username": user.username, "active": user.is_active}
 

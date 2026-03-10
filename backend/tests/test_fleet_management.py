@@ -50,3 +50,71 @@ def test_device_group_filter_and_last_seen_filter() -> None:
         last_seen_before=datetime(2021, 1, 1, tzinfo=timezone.utc),
     )
     assert [d.id for d in stale] == ["g2"]
+
+
+def test_group_bulk_action_rollout_percentage_selects_subset() -> None:
+    db = _db_session()
+    svc = DeviceService(db)
+
+    d1 = svc.register("r1", "Rollout 1", None, "1.1.0", organization_id=1)
+    d2 = svc.register("r2", "Rollout 2", None, "1.1.0", organization_id=1)
+    d3 = svc.register("r3", "Rollout 3", None, "1.1.0", organization_id=1)
+    d4 = svc.register("r4", "Rollout 4", None, "1.1.0", organization_id=1)
+
+    group = svc.create_group("RolloutGroup", organization_id=1)
+    for device in (d1, d2, d3, d4):
+        svc.assign_group_member(group.id, device.id)
+
+    result = svc.execute_group_action(
+        group_id=group.id,
+        action="update",
+        actor="admin",
+        organization_id=1,
+        target_version="1.2.0",
+        rollout_percentage=50,
+    )
+
+    assert result["accepted"] == 2
+    assert len(result["deferred_device_ids"]) == 2
+
+
+def test_group_bulk_action_rejects_incompatible_target_version() -> None:
+    db = _db_session()
+    svc = DeviceService(db)
+
+    dev = svc.register("cmp-1", "Compat Device", None, "1.4.0", organization_id=1)
+    group = svc.create_group("CompatGroup", organization_id=1)
+    svc.assign_group_member(group.id, dev.id)
+
+    try:
+        svc.execute_group_action(
+            group_id=group.id,
+            action="update",
+            actor="admin",
+            organization_id=1,
+            target_version="2.0.0",
+        )
+        assert False, "expected ValueError for incompatible version"
+    except ValueError as exc:
+        assert "incompatible target_version" in str(exc)
+
+
+def test_group_bulk_action_dry_run_does_not_emit_logs_or_events() -> None:
+    db = _db_session()
+    svc = DeviceService(db)
+
+    dev = svc.register("dry-1", "Dry Run Device", None, "1.2.0", organization_id=1)
+    group = svc.create_group("DryRun", organization_id=1)
+    svc.assign_group_member(group.id, dev.id)
+
+    result = svc.execute_group_action(
+        group_id=group.id,
+        action="rollback",
+        actor="admin",
+        organization_id=1,
+        target_version="1.1.0",
+        dry_run=True,
+    )
+
+    assert result["dry_run"] is True
+    assert "event_id" not in result

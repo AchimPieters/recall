@@ -29,6 +29,7 @@ from backend.app.api.routes import (
 )
 from backend.app.core.config import get_settings
 from backend.app.db.database import Base, engine, get_db
+from backend.app.db.migrate import apply_sql_migrations
 
 settings_conf = get_settings()
 
@@ -65,6 +66,7 @@ def _ensure_runtime_schema_compat() -> None:
 @asynccontextmanager
 async def lifespan(_: FastAPI):
     if settings_conf.auto_create_schema:
+        apply_sql_migrations(engine)
         Base.metadata.create_all(bind=engine)
         _ensure_runtime_schema_compat()
     _bootstrap_admin()
@@ -87,17 +89,17 @@ WEB_DIR = Path(__file__).resolve().parents[2] / "web"
 if WEB_DIR.exists():
     app.mount("/web", StaticFiles(directory=str(WEB_DIR), html=True), name="web")
 
-for prefix in ("", "/api/v1"):
-    app.include_router(platform.router, prefix=prefix)
-    app.include_router(auth.router, prefix=prefix)
-    app.include_router(devices.router, prefix=prefix)
-    app.include_router(media.router, prefix=prefix)
-    app.include_router(events.router, prefix=prefix)
-    app.include_router(monitor.router, prefix=prefix)
-    app.include_router(settings.router, prefix=prefix)
-    app.include_router(playlists.router, prefix=prefix)
-    app.include_router(security.router, prefix=prefix)
-    app.include_router(system.router, prefix=prefix)
+api_prefix = "/api/v1"
+app.include_router(platform.router, prefix=api_prefix)
+app.include_router(auth.router, prefix=api_prefix)
+app.include_router(devices.router, prefix=api_prefix)
+app.include_router(media.router, prefix=api_prefix)
+app.include_router(events.router, prefix=api_prefix)
+app.include_router(monitor.router, prefix=api_prefix)
+app.include_router(settings.router, prefix=api_prefix)
+app.include_router(playlists.router, prefix=api_prefix)
+app.include_router(security.router, prefix=api_prefix)
+app.include_router(system.router, prefix=api_prefix)
 
 request_latency = Histogram(
     "http_request_duration_seconds", "Request latency", ["method", "path"]
@@ -107,9 +109,19 @@ request_latency = Histogram(
 @app.middleware("http")
 async def request_logger(request: Request, call_next):
     request_id = request.headers.get("X-Request-ID", uuid4().hex)
+
+    host_header = request.headers.get("host", "")
+    host = host_header.split(":", 1)[0].strip().lower()
+    allowed_hosts = set(settings_conf.allowed_hosts)
+    if host and "*" not in allowed_hosts and host not in allowed_hosts:
+        return PlainTextResponse("Invalid host header", status_code=400)
+
     if settings_conf.enforce_https and settings_conf.environment != "dev":
         forwarded_proto = request.headers.get("X-Forwarded-Proto", "http")
-        if forwarded_proto != "https" and request.url.scheme != "https":
+        scheme = request.url.scheme
+        if settings_conf.trust_forwarded_proto:
+            scheme = forwarded_proto
+        if scheme != "https":
             return PlainTextResponse("HTTPS required", status_code=426)
 
     start = time.perf_counter()
@@ -125,6 +137,8 @@ async def request_logger(request: Request, call_next):
     response.headers["Cross-Origin-Opener-Policy"] = "same-origin"
     response.headers["Cross-Origin-Resource-Policy"] = "same-origin"
     response.headers["Content-Security-Policy"] = "default-src 'self'"
+    if settings_conf.enforce_https and settings_conf.environment != "dev":
+        response.headers["Strict-Transport-Security"] = "max-age=31536000; includeSubDomains"
     logger.info(
         "request",
         request_id=request_id,

@@ -37,8 +37,11 @@ class SettingsService:
             raise ValueError(f"Unsupported settings scope: {scope}")
         if scope == SCOPE_GLOBAL and (organization_id is not None or device_id is not None):
             raise ValueError("Global settings cannot target organization or device")
-        if scope == SCOPE_ORGANIZATION and organization_id is None:
-            raise ValueError("Organization settings require organization_id")
+        if scope == SCOPE_ORGANIZATION:
+            if organization_id is None:
+                raise ValueError("Organization settings require organization_id")
+            if device_id is not None:
+                raise ValueError("Organization settings cannot target device_id")
         if scope == SCOPE_DEVICE and (organization_id is None or not device_id):
             raise ValueError("Device settings require organization_id and device_id")
 

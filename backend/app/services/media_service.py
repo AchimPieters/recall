@@ -26,7 +26,13 @@ class LocalStorageBackend:
         self.base_dir.mkdir(parents=True, exist_ok=True)
 
     def write_bytes(self, relative_name: str, data: bytes) -> Path:
-        target = self.base_dir / relative_name
+        target = (self.base_dir / relative_name).resolve()
+        base = self.base_dir.resolve()
+        try:
+            target.relative_to(base)
+        except ValueError as exc:
+            raise ValueError("Invalid storage path") from exc
+        target.parent.mkdir(parents=True, exist_ok=True)
         target.write_bytes(data)
         return target
 

@@ -27,6 +27,19 @@ class Settings(BaseModel):
         ).lower()
         == "true"
     )
+    trust_forwarded_proto: bool = Field(
+        default_factory=lambda: os.getenv("RECALL_TRUST_FORWARDED_PROTO", "false").lower()
+        == "true"
+    )
+    allowed_hosts: list[str] = Field(
+        default_factory=lambda: [
+            host.strip().lower()
+            for host in os.getenv(
+                "RECALL_ALLOWED_HOSTS", "localhost,127.0.0.1,testserver"
+            ).split(",")
+            if host.strip()
+        ]
+    )
     app_version: str = Field(
         default_factory=lambda: os.getenv("RECALL_VERSION", "0.2.0")
     )
@@ -56,6 +69,14 @@ class Settings(BaseModel):
     )
     redis_url: str = Field(
         default_factory=lambda: os.getenv("REDIS_URL", "redis://localhost:6379/0")
+    )
+    worker_default_retry_delay_seconds: int = Field(
+        default_factory=lambda: int(os.getenv("RECALL_WORKER_RETRY_DELAY_SECONDS", "10")),
+        ge=1,
+    )
+    worker_max_retries: int = Field(
+        default_factory=lambda: int(os.getenv("RECALL_WORKER_MAX_RETRIES", "5")),
+        ge=1,
     )
     ffprobe_binary: str = Field(
         default_factory=lambda: os.getenv("RECALL_FFPROBE_BINARY", "ffprobe")

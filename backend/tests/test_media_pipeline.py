@@ -9,7 +9,7 @@ from sqlalchemy.orm import sessionmaker
 from backend.app.db.database import Base
 from backend.app.models.media import MediaVersion
 from backend.app.services import media_service as media_service_module
-from backend.app.services.media_service import MediaService
+from backend.app.services.media_service import LocalStorageBackend, MediaService
 
 
 def _db_session():
@@ -70,3 +70,16 @@ def test_corrupt_image_rejected(tmp_path: Path, monkeypatch) -> None:
     svc = MediaService(db)
     with pytest.raises(ValueError, match="Corrupt image upload"):
         svc.store_upload("broken.png", "image/png", b"not-a-real-image", organization_id=1)
+
+
+def test_local_storage_backend_blocks_path_traversal(tmp_path: Path) -> None:
+    storage = LocalStorageBackend(tmp_path)
+    with pytest.raises(ValueError, match="Invalid storage path"):
+        storage.write_bytes("../escape.bin", b"x")
+
+
+def test_local_storage_backend_allows_nested_relative_paths(tmp_path: Path) -> None:
+    storage = LocalStorageBackend(tmp_path)
+    target = storage.write_bytes("nested/file.bin", b"abc")
+    assert target.exists()
+    assert target.read_bytes() == b"abc"

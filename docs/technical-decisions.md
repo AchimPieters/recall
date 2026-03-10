@@ -1,6 +1,6 @@
 # Technical Decision Record — Enterprise Rebuild
 
-Status: **Accepted**  
+Status: **Accepted**
 Date: 2026-03-09
 
 ## Beslisdoel

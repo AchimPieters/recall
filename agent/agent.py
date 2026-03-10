@@ -1,6 +1,7 @@
 from pathlib import Path
 import requests
 
+from agent.agent_modules import config
 from agent.agent_modules.auth import validate_runtime_config
 from agent.agent_modules.cache import read_cached_config, write_cached_config
 from agent.agent_modules.device_client import fetch_device_config
@@ -13,6 +14,25 @@ from agent.agent_modules.player import play_from_cache
 from agent.agent_modules.recovery import clear_failures, record_failure, should_trigger_recovery
 from agent.agent_modules.updater import report_version
 from agent.agent_modules.watchdog import backoff_sleep
+
+
+def _recovery_window_minutes() -> int:
+    return max(1, int(config.RECOVERY_WINDOW_MINUTES))
+
+
+def _recovery_max_failures() -> int:
+    return max(1, int(config.RECOVERY_MAX_FAILURES))
+
+
+def _record_failure_with_policy() -> int:
+    return record_failure(window_minutes=_recovery_window_minutes())
+
+
+def _should_trigger_recovery_with_policy() -> bool:
+    return should_trigger_recovery(
+        max_failures=_recovery_max_failures(),
+        window_minutes=_recovery_window_minutes(),
+    )
 
 
 def sync_once(session: requests.Session) -> None:
@@ -65,18 +85,18 @@ def main() -> None:
             write_health("online")
         except requests.RequestException as exc:
             append_log("warning", f"network_error: {exc}")
-            failure_count = record_failure()
+            failure_count = _record_failure_with_policy()
             write_health("degraded", f"network error (failures={failure_count})")
             run_offline()
-            if should_trigger_recovery():
+            if _should_trigger_recovery_with_policy():
                 append_log("error", "recovery_mode_triggered: repeated failures")
             backoff = backoff_sleep(backoff)
         except Exception as exc:  # noqa: BLE001
             append_log("error", f"runtime_error: {exc}")
-            failure_count = record_failure()
+            failure_count = _record_failure_with_policy()
             write_health("error", f"{exc} (failures={failure_count})")
             run_offline()
-            if should_trigger_recovery():
+            if _should_trigger_recovery_with_policy():
                 append_log("error", "recovery_mode_triggered: runtime failures")
             backoff = backoff_sleep(backoff)
 

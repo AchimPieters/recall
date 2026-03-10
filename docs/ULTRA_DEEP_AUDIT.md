@@ -1,6 +1,6 @@
 # Recall Ultra-Deep Code Audit (Current State)
 
-Date: 2026-03-07  
+Date: 2026-03-07
 Scope: Entire repository (`/workspace/recall`)
 
 ## Requested benchmark

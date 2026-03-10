@@ -1,3 +1,4 @@
+import pytest
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 
@@ -69,3 +70,24 @@ def test_playlist_supports_web_url_and_widget_items() -> None:
 
     assert svc.validate_playlist_playable(web.id)
     assert svc.validate_playlist_playable(widget.id)
+
+
+def test_web_url_item_rejects_non_http_scheme() -> None:
+    db = _db_session()
+    svc = PlaylistService(db)
+
+    web = svc.create_playlist("WebInvalid")
+    with pytest.raises(ValueError, match=r"absolute http\(s\) URL"):
+        svc.add_item(web.id, media_id=None, content_type="web_url", source_url="javascript:alert(1)")
+
+
+def test_widget_item_requires_valid_json_object() -> None:
+    db = _db_session()
+    svc = PlaylistService(db)
+
+    widget = svc.create_playlist("WidgetInvalid")
+    with pytest.raises(ValueError, match="valid JSON"):
+        svc.add_item(widget.id, media_id=None, content_type="widget", widget_config="not-json")
+
+    with pytest.raises(ValueError, match="JSON object"):
+        svc.add_item(widget.id, media_id=None, content_type="widget", widget_config='[1,2,3]')

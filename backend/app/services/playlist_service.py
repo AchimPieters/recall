@@ -1,4 +1,6 @@
 from datetime import datetime, timezone
+import json
+from urllib.parse import urlparse
 
 from sqlalchemy.orm import Session
 
@@ -66,10 +68,21 @@ class PlaylistService:
             raise ValueError("unsupported content_type")
         if content_type in {"image", "video"} and media_id is None:
             raise ValueError("media_id is required for image/video items")
-        if content_type == "web_url" and not source_url:
-            raise ValueError("source_url is required for web_url items")
-        if content_type == "widget" and not widget_config:
-            raise ValueError("widget_config is required for widget items")
+        if content_type == "web_url":
+            if not source_url:
+                raise ValueError("source_url is required for web_url items")
+            parsed = urlparse(source_url)
+            if parsed.scheme not in {"http", "https"} or not parsed.netloc:
+                raise ValueError("source_url must be an absolute http(s) URL")
+        if content_type == "widget":
+            if not widget_config:
+                raise ValueError("widget_config is required for widget items")
+            try:
+                parsed_widget = json.loads(widget_config)
+            except json.JSONDecodeError as exc:
+                raise ValueError("widget_config must be valid JSON") from exc
+            if not isinstance(parsed_widget, dict):
+                raise ValueError("widget_config must be a JSON object")
 
         item = PlaylistItem(
             playlist_id=playlist_id,
@@ -124,6 +137,29 @@ class PlaylistService:
         self.db.refresh(rule)
         return rule
 
+    def _validate_recurrence(self, recurrence: str | None) -> str | None:
+        if recurrence is None:
+            return None
+        value = recurrence.strip().lower()
+        if value in {"once", "daily"}:
+            return value
+        if value.startswith("weekdays:"):
+            raw = value.split(":", 1)[1]
+            if not raw:
+                raise ValueError("weekdays recurrence requires at least one weekday")
+            weekdays: list[int] = []
+            for token in raw.split(","):
+                token = token.strip()
+                if not token.isdigit():
+                    raise ValueError("weekdays recurrence must contain digits 0-6")
+                day = int(token)
+                if day < 0 or day > 6:
+                    raise ValueError("weekdays recurrence must use values 0-6")
+                weekdays.append(day)
+            normalized = ",".join(str(day) for day in sorted(set(weekdays)))
+            return f"weekdays:{normalized}"
+        raise ValueError("unsupported recurrence")
+
     def schedule_playlist(
         self,
         playlist_id: int,
@@ -135,6 +171,7 @@ class PlaylistService:
         timezone_name: str = "UTC",
     ) -> Schedule:
         starts_at, ends_at = self._validate_schedule_window(target, starts_at, ends_at)
+        recurrence = self._validate_recurrence(recurrence)
         schedule = Schedule(
             playlist_id=playlist_id,
             target=target,
@@ -337,8 +374,8 @@ class PlaylistService:
         if not layouts:
             return []
 
-        # For now, pick first layout as active baseline.
-        layout = layouts[0]
+        # Pick most recently created layout as active baseline.
+        layout = sorted(layouts, key=lambda l: l.id, reverse=True)[0]
         preview = self.get_layout_preview(layout.id)
         zones: list[dict] = []
         fallback = self.resolve_for_device(device_id).get("playlist_id")

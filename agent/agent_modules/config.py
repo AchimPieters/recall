@@ -15,3 +15,6 @@ AGENT_VERSION = os.getenv("RECALL_AGENT_VERSION", "2.0.0")
 MEDIA_CACHE_DIR = Path(
     os.getenv("RECALL_MEDIA_CACHE_DIR", str(Path.home() / ".recall-cache"))
 )
+
+RECOVERY_WINDOW_MINUTES = int(os.getenv("RECALL_RECOVERY_WINDOW_MINUTES", "10"))
+RECOVERY_MAX_FAILURES = int(os.getenv("RECALL_RECOVERY_MAX_FAILURES", "5"))

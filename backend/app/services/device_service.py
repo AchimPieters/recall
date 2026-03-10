@@ -1,4 +1,6 @@
 from datetime import datetime, timedelta, timezone
+import math
+import re
 from uuid import uuid4
 from sqlalchemy.orm import Session
 from backend.app.core.auth import enforce_role_permission
@@ -18,6 +20,8 @@ from backend.app.services.event_service import EventService
 
 settings = get_settings()
 
+ALERT_LEVELS = {"info", "warning", "critical"}
+ALERT_STATUSES = {"open", "acknowledged", "resolved"}
 
 _device_command_queue: dict[str, list[dict]] = {}
 
@@ -250,6 +254,8 @@ class DeviceService:
         organization_id: int | None,
         target_version: str | None = None,
         playlist_id: int | None = None,
+        rollout_percentage: int = 100,
+        dry_run: bool = False,
         actor_role: str | None = None,
     ) -> dict:
         if actor_role is not None:
@@ -258,6 +264,8 @@ class DeviceService:
         valid_actions = {"reboot", "update", "playlist_assign", "rollback"}
         if action not in valid_actions:
             raise ValueError("unsupported action")
+        if rollout_percentage < 1 or rollout_percentage > 100:
+            raise ValueError("rollout_percentage must be between 1 and 100")
 
         group = self.get_group(group_id)
         if not group:
@@ -269,11 +277,43 @@ class DeviceService:
         if action in {"update", "rollback"} and not target_version:
             raise ValueError("target_version is required for update/rollback")
 
+        selected_device_ids = self._select_rollout_devices(device_ids, rollout_percentage)
+
+        incompatible_device_ids: list[str] = []
+        if action in {"update", "rollback"} and target_version:
+            incompatible_device_ids = self._find_incompatible_devices(
+                selected_device_ids,
+                target_version,
+                action,
+            )
+            if incompatible_device_ids:
+                raise ValueError(
+                    "incompatible target_version for devices: "
+                    + ",".join(sorted(incompatible_device_ids))
+                )
+
         details: dict[str, str | int | None] = {"group_id": group_id, "action": action}
         if target_version:
             details["target_version"] = target_version
         if playlist_id is not None:
             details["playlist_id"] = playlist_id
+        details["rollout_percentage"] = rollout_percentage
+        details["selected"] = len(selected_device_ids)
+        details["deferred"] = len(device_ids) - len(selected_device_ids)
+        details["dry_run"] = dry_run
+
+        if dry_run:
+            return {
+                "group_id": group.id,
+                "group_name": group.name,
+                "action": action,
+                "accepted": len(selected_device_ids),
+                "device_ids": selected_device_ids,
+                "deferred_device_ids": [
+                    d for d in device_ids if d not in set(selected_device_ids)
+                ],
+                **details,
+            }
 
         event = EventService(self.db).publish(
             category="device_group",
@@ -282,14 +322,15 @@ class DeviceService:
             payload={
                 "group_id": group_id,
                 "group_name": group.name,
-                "device_ids": device_ids,
+                "device_ids": selected_device_ids,
                 "target_version": target_version,
                 "playlist_id": playlist_id,
+                "rollout_percentage": rollout_percentage,
             },
             organization_id=organization_id,
         )
 
-        for device_id in device_ids:
+        for device_id in selected_device_ids:
             message = f"bulk action={action}"
             if target_version:
                 message += f" target_version={target_version}"
@@ -309,11 +350,54 @@ class DeviceService:
             "group_id": group.id,
             "group_name": group.name,
             "action": action,
-            "accepted": len(device_ids),
-            "device_ids": device_ids,
+            "accepted": len(selected_device_ids),
+            "device_ids": selected_device_ids,
+            "deferred_device_ids": [d for d in device_ids if d not in set(selected_device_ids)],
             "event_id": event["id"],
             **details,
         }
+
+    @staticmethod
+    def _parse_semver(version: str | None) -> tuple[int, int, int] | None:
+        if not version:
+            return None
+        match = re.match(r"^v?(\d+)\.(\d+)\.(\d+)", version.strip())
+        if not match:
+            return None
+        return int(match.group(1)), int(match.group(2)), int(match.group(3))
+
+    def _find_incompatible_devices(
+        self,
+        device_ids: list[str],
+        target_version: str,
+        action: str,
+    ) -> list[str]:
+        target = self._parse_semver(target_version)
+        if not target:
+            return device_ids
+
+        incompatible: list[str] = []
+        for device_id in device_ids:
+            device = self.get_device(device_id)
+            current = self._parse_semver(device.version if device else None)
+            if not current:
+                incompatible.append(device_id)
+                continue
+            if current[0] != target[0]:
+                incompatible.append(device_id)
+                continue
+            if action == "update" and current >= target:
+                incompatible.append(device_id)
+            if action == "rollback" and current <= target:
+                incompatible.append(device_id)
+        return incompatible
+
+    @staticmethod
+    def _select_rollout_devices(device_ids: list[str], rollout_percentage: int) -> list[str]:
+        if not device_ids:
+            return []
+        count = math.ceil(len(device_ids) * rollout_percentage / 100)
+        return sorted(device_ids)[:count]
 
     def record_screenshot(
         self, device_id: str, image_path: str, organization_id: int | None
@@ -379,8 +463,12 @@ class DeviceService:
     def create_alert(
         self, level: str, source: str, message: str, organization_id: int | None
     ) -> Alert:
+        normalized_level = (level or "").strip().lower()
+        if normalized_level not in ALERT_LEVELS:
+            raise ValueError(f"unsupported alert level: {level}")
+
         alert = Alert(
-            level=level,
+            level=normalized_level,
             source=source,
             message=message,
             status="open",
@@ -398,14 +486,30 @@ class DeviceService:
         if organization_id is not None:
             query = query.filter(Alert.organization_id == organization_id)
         if status:
-            query = query.filter(Alert.status == status)
+            normalized_status = status.strip().lower()
+            if normalized_status not in ALERT_STATUSES:
+                raise ValueError(f"unsupported alert status: {status}")
+            query = query.filter(Alert.status == normalized_status)
         return query.order_by(Alert.created_at.desc(), Alert.id.desc()).limit(200).all()
 
     def resolve_alert(self, alert_id: int) -> Alert | None:
         alert = self.db.query(Alert).filter(Alert.id == alert_id).first()
         if not alert:
             return None
+        if alert.status == "resolved":
+            return alert
         alert.status = "resolved"
+        self.db.commit()
+        self.db.refresh(alert)
+        return alert
+
+    def acknowledge_alert(self, alert_id: int) -> Alert | None:
+        alert = self.db.query(Alert).filter(Alert.id == alert_id).first()
+        if not alert:
+            return None
+        if alert.status in {"acknowledged", "resolved"}:
+            return alert
+        alert.status = "acknowledged"
         self.db.commit()
         self.db.refresh(alert)
         return alert

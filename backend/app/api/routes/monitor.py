@@ -33,9 +33,12 @@ def create_alert(
     db: Session = Depends(get_db),
     user: AuthUser = Depends(get_current_user),
 ):
-    alert = DeviceService(db).create_alert(
-        payload.level, payload.source, payload.message, user.organization_id
-    )
+    try:
+        alert = DeviceService(db).create_alert(
+            payload.level, payload.source, payload.message, user.organization_id
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
     return {
         "id": alert.id,
         "level": alert.level,
@@ -54,6 +57,13 @@ def list_alerts(
     db: Session = Depends(get_db),
     user: AuthUser = Depends(get_current_user),
 ):
+    try:
+        alerts = DeviceService(db).list_alerts(
+            status=status, organization_id=user.organization_id
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
     return [
         {
             "id": alert.id,
@@ -63,10 +73,28 @@ def list_alerts(
             "status": alert.status,
             "created_at": alert.created_at,
         }
-        for alert in DeviceService(db).list_alerts(
-            status=status, organization_id=user.organization_id
-        )
+        for alert in alerts
     ]
+
+
+
+@router.post(
+    "/alerts/{alert_id}/ack",
+    dependencies=[Depends(require_role("admin", "operator"))],
+)
+def acknowledge_alert(
+    alert_id: int,
+    db: Session = Depends(get_db),
+    user: AuthUser = Depends(get_current_user),
+):
+    visible = DeviceService(db).list_alerts(status=None, organization_id=user.organization_id)
+    if user.organization_id is not None and not any(a.id == alert_id for a in visible):
+        raise HTTPException(status_code=404, detail="alert not found")
+
+    alert = DeviceService(db).acknowledge_alert(alert_id)
+    if not alert:
+        raise HTTPException(status_code=404, detail="alert not found")
+    return {"id": alert.id, "status": alert.status}
 
 
 @router.post(

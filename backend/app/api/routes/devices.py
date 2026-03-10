@@ -1,4 +1,7 @@
-from fastapi import APIRouter, Depends, HTTPException, Request
+import csv
+from io import StringIO
+from fastapi import APIRouter, Depends, Header, HTTPException, Request
+from fastapi.responses import PlainTextResponse
 from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
 from backend.app.core.auth import (
@@ -12,6 +15,41 @@ from backend.app.db.database import get_db
 from backend.app.services.device_service import DeviceService
 
 router = APIRouter(prefix="/device", tags=["devices"])
+
+ALLOWED_DEVICE_STATUSES = {"online", "stale", "offline", "error"}
+
+
+SUPPORTED_DEVICE_PROTOCOL_VERSIONS = {"1"}
+
+
+def _validate_device_protocol_version(
+    x_device_protocol_version: str | None = Header(default="1"),
+) -> str:
+    version = (x_device_protocol_version or "1").strip()
+    if version not in SUPPORTED_DEVICE_PROTOCOL_VERSIONS:
+        raise HTTPException(
+            status_code=400,
+            detail=(
+                f"Unsupported device protocol version '{version}'. "
+                "Supported versions: 1"
+            ),
+        )
+    return version
+
+
+
+class DeviceCapabilitiesPayload(BaseModel):
+    os: str | None = None
+    hardware_type: str | None = None
+    display_outputs: int | None = Field(default=None, ge=0)
+    cpu: str | None = None
+    memory_mb: int | None = Field(default=None, ge=0)
+    resolution: str | None = None
+    agent_version: str | None = None
+    connectivity: str | None = None
+
+    def as_dict(self) -> dict:
+        return self.model_dump(exclude_none=True)
 
 
 class DeviceCapabilitiesPayload(BaseModel):
@@ -98,6 +136,8 @@ class BulkGroupActionPayload(BaseModel):
     action: str = Field(pattern="^(reboot|update|playlist_assign|rollback)$")
     target_version: str | None = Field(default=None, max_length=64)
     playlist_id: int | None = Field(default=None, ge=1)
+    rollout_percentage: int = Field(default=100, ge=1, le=100)
+    dry_run: bool = False
 
 
 @router.post(
@@ -108,7 +148,9 @@ def register(
     request: Request,
     db: Session = Depends(get_db),
     user: AuthUser = Depends(get_current_user),
+    protocol_version: str = Depends(_validate_device_protocol_version),
 ):
+    _ = protocol_version
     svc = DeviceService(db)
     device = svc.register(
         payload.id,
@@ -129,7 +171,9 @@ def heartbeat(
     payload: HeartbeatPayload,
     db: Session = Depends(get_db),
     user: AuthUser = Depends(get_current_user),
+    protocol_version: str = Depends(_validate_device_protocol_version),
 ):
+    _ = protocol_version
     svc = DeviceService(db)
     device = svc.heartbeat(payload.id, payload.metrics)
     if not device:
@@ -270,7 +314,9 @@ def fetch_commands(
     device_id: str,
     db: Session = Depends(get_db),
     user: AuthUser = Depends(get_current_user),
+    protocol_version: str = Depends(_validate_device_protocol_version),
 ):
+    _ = protocol_version
     svc = DeviceService(db)
     device = svc.get_device(device_id)
     if not device:
@@ -286,7 +332,9 @@ def command_ack(
     payload: CommandAckPayload,
     db: Session = Depends(get_db),
     user: AuthUser = Depends(get_current_user),
+    protocol_version: str = Depends(_validate_device_protocol_version),
 ):
+    _ = protocol_version
     svc = DeviceService(db)
     device = svc.get_device(payload.id)
     if not device:
@@ -305,7 +353,9 @@ def playback_status(
     payload: PlaybackStatusPayload,
     db: Session = Depends(get_db),
     user: AuthUser = Depends(get_current_user),
+    protocol_version: str = Depends(_validate_device_protocol_version),
 ):
+    _ = protocol_version
     svc = DeviceService(db)
     device = svc.get_device(payload.id)
     if not device:
@@ -334,10 +384,23 @@ def list_devices(
     svc = DeviceService(db)
     svc.mark_presence(organization_id=user.organization_id)
 
+    if status and status not in ALLOWED_DEVICE_STATUSES:
+        raise HTTPException(
+            status_code=400,
+            detail=f"invalid status '{status}', expected one of: {', '.join(sorted(ALLOWED_DEVICE_STATUSES))}",
+        )
+
     parsed_last_seen = None
     if last_seen_before:
         from datetime import datetime
-        parsed_last_seen = datetime.fromisoformat(last_seen_before)
+
+        raw = last_seen_before.strip()
+        if raw.endswith("Z"):
+            raw = raw[:-1] + "+00:00"
+        try:
+            parsed_last_seen = datetime.fromisoformat(raw)
+        except ValueError as exc:
+            raise HTTPException(status_code=400, detail="invalid last_seen_before timestamp") from exc
 
     return svc.list_devices(
         organization_id=user.organization_id,
@@ -348,6 +411,69 @@ def list_devices(
         last_seen_before=parsed_last_seen,
     )
 
+
+
+
+@router.get("/export.csv", dependencies=[Depends(require_permission("devices:read"))])
+def export_devices_csv(
+    status: str | None = None,
+    group_id: int | None = None,
+    tag: str | None = None,
+    version: str | None = None,
+    last_seen_before: str | None = None,
+    db: Session = Depends(get_db),
+    user: AuthUser = Depends(get_current_user),
+):
+    svc = DeviceService(db)
+    svc.mark_presence(organization_id=user.organization_id)
+
+    if status and status not in ALLOWED_DEVICE_STATUSES:
+        raise HTTPException(
+            status_code=400,
+            detail=f"invalid status '{status}', expected one of: {', '.join(sorted(ALLOWED_DEVICE_STATUSES))}",
+        )
+
+    parsed_last_seen = None
+    if last_seen_before:
+        from datetime import datetime
+
+        raw = last_seen_before.strip()
+        if raw.endswith("Z"):
+            raw = raw[:-1] + "+00:00"
+        try:
+            parsed_last_seen = datetime.fromisoformat(raw)
+        except ValueError as exc:
+            raise HTTPException(status_code=400, detail="invalid last_seen_before timestamp") from exc
+
+    devices = svc.list_devices(
+        organization_id=user.organization_id,
+        status=status,
+        group_id=group_id,
+        tag=tag,
+        version=version,
+        last_seen_before=parsed_last_seen,
+    )
+
+    output = StringIO()
+    writer = csv.writer(output)
+    writer.writerow(["id", "name", "status", "version", "last_seen", "organization_id"])
+    for device in devices:
+        writer.writerow(
+            [
+                device.id,
+                device.name,
+                device.status,
+                device.version or "",
+                device.last_seen.isoformat() if device.last_seen else "",
+                "" if device.organization_id is None else str(device.organization_id),
+            ]
+        )
+
+    return PlainTextResponse(
+        output.getvalue(),
+        media_type="text/csv",
+        headers={"Content-Disposition": 'attachment; filename="devices.csv"'},
+    )
 
 @router.post("/groups", dependencies=[Depends(require_permission("devices:write"))])
 def create_group(
@@ -430,6 +556,8 @@ def group_bulk_action(
             organization_id=user.organization_id,
             target_version=payload.target_version,
             playlist_id=payload.playlist_id,
+            rollout_percentage=payload.rollout_percentage,
+            dry_run=payload.dry_run,
             actor_role=user.role,
         )
     except ValueError as exc:

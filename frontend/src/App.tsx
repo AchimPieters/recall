@@ -7,6 +7,7 @@ import { SchedulesPage } from './pages/SchedulesPage'
 import { AlertsPage } from './pages/AlertsPage'
 import { SettingsPage } from './pages/SettingsPage'
 import { AuditLogsPage } from './pages/AuditLogsPage'
+import { ObservabilityPage } from './pages/ObservabilityPage'
 
 const links = [
   ['/', 'Dashboard'],
@@ -17,6 +18,7 @@ const links = [
   ['/alerts', 'Alerts'],
   ['/settings', 'Settings'],
   ['/audit-logs', 'Audit logs'],
+  ['/observability', 'Observability'],
 ]
 
 export function App() {
@@ -40,6 +42,7 @@ export function App() {
         <Route path="/alerts" element={<AlertsPage />} />
         <Route path="/settings" element={<SettingsPage />} />
         <Route path="/audit-logs" element={<AuditLogsPage />} />
+        <Route path="/observability" element={<ObservabilityPage />} />
       </Routes>
     </div>
   )
