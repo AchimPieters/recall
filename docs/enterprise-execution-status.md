@@ -87,5 +87,39 @@ Alle 27 stappen zijn opnieuw doorlopen en gevalideerd op basis van de actuele co
 | 26 | Extra enterprise features productierijp maken | Ingang gezet: fleet inventory exportfeature toegevoegd (`/api/v1/device/export.csv`) met filterondersteuning en route-tests; bredere set enterprise productfeatures + acceptatiecriteria blijft open |
 | 27 | Finale acceptatiefase (security/load/failover/DR) | Ingang gezet: formeel v1.0 sign-off runbook + acceptance checker (`tools/acceptance_check.py`) + test toegevoegd; daadwerkelijke ingevulde evidence en finale go/no-go blijven open |
 
+## Uitgevoerde actie op deze feedbackronde
+Alle 27 stappen zijn opnieuw doorlopen en gevalideerd op basis van de actuele code/docs/testset. Conclusie blijft dat stap 1 volledig afgerond is en stappen 2–27 nog (deels) open staan. Op verzoek is daarom hieronder een concreet remediatieplan per open stap toegevoegd.
+
+## Remediatieplan per open stap (nu toegevoegd)
+
+| Stap | Focus om naar ✅ te brengen | Concreet bewijs dat verplicht wordt |
+|---|---|---|
+| 2 | Legacy API-paden uitfaseren en route-splitsing afronden | Verwijderde legacy importpaden + routeregistratie-tests |
+| 3 | ORM/Alembic volledig in lijn met SQL migraties | Alembic revisions + migration smoke test in CI |
+| 4 | Settings-validatie voor alle scopes afronden | Negatieve/positieve validatietests per scope |
+| 5 | MFA + abuse-hardening toevoegen | MFA endpoints + lockout/rate-limit e2e tests |
+| 6 | Volledige RBAC-matrix (backend + frontend) afronden | Matrixdocument + permission coverage tests |
+| 7 | Auditdekking voor alle kritieke acties 100% | Audit assertions per kritieke endpoint/service |
+| 8 | Device protocol lifecycle governance afmaken | Versioning policy + compat-tests v1/vnext |
+| 9 | Agent hardening/updater-compatibiliteit afronden | Recovery/updater integrietests + runbook |
+| 10 | Async media workers + transcoding + S3 afronden | Worker queue tests + storage integration tests |
+| 11 | Playlist UX-flow en enterprise editor afronden | Frontend acceptance tests + playable snapshots |
+| 12 | Planner UX + uitzonderingsbeheer afronden | Planner e2e tests incl. blackout/exceptions |
+| 13 | Layout preview UX afronden | UI regressietests + preview screenshots |
+| 14 | Fleet provisioning en enterprise UX afronden | Device lifecycle e2e + bulk-action audits |
+| 15 | Rule engine + severity lifecycle afronden | Alert simulation tests + notificatiecontracten |
+| 16 | Worker retry/visibility production-grade maken | Dead-letter/retry dashboards + tests |
+| 17 | Staged OTA rollouts met rollback governance | Rollout scenario tests + compatibiliteitsmatrix |
+| 18 | Grafana/Loki dashboards + runbooks finaliseren | Dashboard exports + on-call runbooks |
+| 19 | Frontend schermset en UX-patronen afronden | DoD checklist + visual/e2e testresultaten |
+| 20 | Tenant-scope op alle domeinen afdwingen | Tenant-isolatie testmatrix (API + DB) |
+| 21 | Security hardening (deploy/process) afronden | Hardening checklist + pentest bevindingen |
+| 22 | Release automation + backup/restore valideren | Disaster-recovery oefening + release pipeline bewijs |
+| 23 | Teststrategie naar doelcoverage brengen | Coverage rapport + ontbrekende suites aangevuld |
+| 24 | CI/CD quality gates volledig afdwingen | Required checks + blokkering bij gate failure |
+| 25 | Docs consistentie/onboarding/releaseflow afronden | Doc lint + onboarding dry-run |
+| 26 | Extra enterprise features productierijp maken | Feature DoD + acceptance criteria per feature |
+| 27 | Finale acceptatiefase (security/load/failover/DR) | Geformaliseerd sign-off dossier v1.0 |
+
 ## Afspraak voor vervolg
 Voor iedere volgende wijziging wordt dit statusdocument mee bijgewerkt zodat zichtbaar blijft welke stap exact van ⚠️ naar ✅ gaat met verifieerbaar bewijs (code, tests, docs, migraties én operationele artefacten).

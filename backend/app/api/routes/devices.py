@@ -52,6 +52,20 @@ class DeviceCapabilitiesPayload(BaseModel):
         return self.model_dump(exclude_none=True)
 
 
+class DeviceCapabilitiesPayload(BaseModel):
+    os: str | None = None
+    hardware_type: str | None = None
+    display_outputs: int | None = Field(default=None, ge=0)
+    cpu: str | None = None
+    memory_mb: int | None = Field(default=None, ge=0)
+    resolution: str | None = None
+    agent_version: str | None = None
+    connectivity: str | None = None
+
+    def as_dict(self) -> dict:
+        return self.model_dump(exclude_none=True)
+
+
 class RegisterPayload(BaseModel):
     id: str
     name: str = "Unnamed"
