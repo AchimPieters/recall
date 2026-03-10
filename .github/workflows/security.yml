@@ -10,7 +10,7 @@ jobs:
     runs-on: ubuntu-latest
     defaults:
       run:
-        working-directory: recall-server
+        working-directory: backend
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
@@ -22,6 +22,6 @@ jobs:
           pip install -r requirements.txt
           pip install "bandit==1.8.2" "pip-audit==2.7.3"
       - name: Bandit
-        run: bandit -q -r recall -lll
+        run: bandit -q -r app -lll
       - name: Dependency audit
         run: pip-audit -r requirements.txt --ignore-vuln CVE-2024-23342

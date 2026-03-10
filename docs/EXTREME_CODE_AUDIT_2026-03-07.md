@@ -1,6 +1,6 @@
 # Extreme Code Audit — Recall
 
-Date: 2026-03-07  
+Date: 2026-03-07
 Auditor: Codex (GPT-5.2-Codex)
 
 ## Scope

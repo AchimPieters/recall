@@ -10,9 +10,33 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - name: Prepare release artifact
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Validate release tag policy
+        run: python tools/release_gate_check.py "${GITHUB_REF_NAME}"
+
+      - name: Backend release smoke tests
         run: |
-          tar -czf recall-${GITHUB_REF_NAME}.tar.gz .
+          python -m pip install --upgrade pip
+          pip install -r recall-server/requirements.txt
+          pytest -q backend/tests/test_release_gate_check.py backend/tests/test_backup_restore.py
+
+      - name: Frontend production build
+        working-directory: frontend
+        run: |
+          npm ci
+          npm run build
+
+      - name: Prepare release artifact
+        run: tar -czf recall-${GITHUB_REF_NAME}.tar.gz .
+
       - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:

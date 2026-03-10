@@ -1,10 +1,12 @@
-from . import devices, events, media, monitor, playlists, security, settings, system
+from . import auth, devices, events, media, monitor, platform, playlists, security, settings, system
 
 __all__ = [
+    "auth",
     "devices",
     "events",
     "media",
     "monitor",
+    "platform",
     "playlists",
     "security",
     "settings",

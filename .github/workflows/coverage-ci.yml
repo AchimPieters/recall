@@ -1,0 +1,71 @@
+name: Coverage CI
+
+on:
+  pull_request:
+    paths:
+      - 'backend/**'
+      - 'agent/**'
+      - '.github/workflows/coverage-ci.yml'
+  push:
+    branches: ["main", "master"]
+    paths:
+      - 'backend/**'
+      - 'agent/**'
+
+jobs:
+  coverage:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install backend test deps
+        run: |
+          python -m pip install --upgrade pip
+          pip install pytest pytest-cov
+          pip install -r recall-server/requirements.txt
+
+      - name: Backend coverage
+        run: |
+          pytest -q backend/tests \
+            --cov=backend/app \
+            --cov-report=term-missing \
+            --cov-report=xml:coverage-backend.xml \
+            --cov-fail-under=60
+
+      - name: Install agent test deps
+        run: |
+          pip install -r agent/requirements.txt
+
+      - name: Agent coverage
+        run: |
+          pytest -q agent/tests \
+            --cov=agent \
+            --cov-report=term-missing \
+            --cov-report=xml:coverage-agent.xml \
+            --cov-fail-under=60
+
+      - name: Enforce backend per-module thresholds
+        run: |
+          python tools/coverage_threshold_check.py coverage-backend.xml \
+            --threshold api/routes/auth.py=70 \
+            --threshold services/device_service.py=75 \
+            --threshold services/media_service.py=60 \
+            --threshold services/settings_service.py=70
+
+      - name: Enforce agent per-module thresholds
+        run: |
+          python tools/coverage_threshold_check.py coverage-agent.xml \
+            --threshold agent.py=40 \
+            --threshold agent_modules/recovery.py=80
+
+      - name: Upload coverage reports
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage-reports
+          path: |
+            coverage-backend.xml
+            coverage-agent.xml

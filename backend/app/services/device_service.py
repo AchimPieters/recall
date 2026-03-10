@@ -1,6 +1,9 @@
 from datetime import datetime, timedelta, timezone
+import math
+import re
 from uuid import uuid4
 from sqlalchemy.orm import Session
+from backend.app.core.auth import enforce_role_permission
 from backend.app.core.config import get_settings
 from backend.app.models.device import (
     Alert,
@@ -9,12 +12,16 @@ from backend.app.models.device import (
     DeviceGroupMember,
     DeviceLog,
     DeviceScreenshot,
+    DeviceTag,
+    DeviceTagLink,
 )
 from backend.app.services.playlist_service import PlaylistService
 from backend.app.services.event_service import EventService
 
 settings = get_settings()
 
+ALERT_LEVELS = {"info", "warning", "critical"}
+ALERT_STATUSES = {"open", "acknowledged", "resolved"}
 
 _device_command_queue: dict[str, list[dict]] = {}
 
@@ -42,6 +49,7 @@ class DeviceService:
         ip: str | None,
         version: str | None,
         organization_id: int | None,
+        capabilities: dict | None = None,
     ) -> Device:
         device = self.db.query(Device).filter(Device.id == device_id).first()
         if not device:
@@ -52,6 +60,8 @@ class DeviceService:
             device.organization_id = organization_id
         device.ip = ip
         device.version = version
+        if capabilities is not None:
+            device.capabilities = capabilities
         device.last_seen = self._utc_now()
         self.db.commit()
         self.db.refresh(device)
@@ -62,7 +72,11 @@ class DeviceService:
         if not device:
             return None
         device.last_seen = self._utc_now()
-        device.status = "online"
+        metric_state = str((metrics or {}).get("state", "")).lower() if metrics else ""
+        if metric_state == "error":
+            device.status = "error"
+        else:
+            device.status = "online"
         device.metrics = metrics
         self.db.commit()
         self.db.refresh(device)
@@ -72,12 +86,15 @@ class DeviceService:
         return self.db.query(Device).filter(Device.id == device_id).first()
 
     def get_config(self, device_id: str) -> dict:
-        playlist_id = PlaylistService(self.db).resolve_active_playlist_id(device_id)
+        playlist_service = PlaylistService(self.db)
+        playlist_id = playlist_service.resolve_active_playlist_id(device_id)
+        zone_plan = playlist_service.resolve_zone_playback_plan(device_id)
         return {
             "device_id": device_id,
             "heartbeat_interval": 30,
             "fallback_content": "default",
             "active_playlist_id": playlist_id,
+            "zone_plan": zone_plan,
         }
 
     def add_log(
@@ -111,12 +128,15 @@ class DeviceService:
         now = self._utc_now()
         changed = 0
         for device in devices:
+            age = now - (self._normalize(device.last_seen) or now) if device.last_seen else None
             if not device.last_seen:
                 new_status = "stale"
-            elif now - (self._normalize(device.last_seen) or now) > timedelta(
-                seconds=settings.heartbeat_timeout_seconds
-            ):
+            elif age and age > timedelta(seconds=settings.heartbeat_timeout_seconds):
                 new_status = "offline"
+            elif age and age > timedelta(seconds=max(5, settings.heartbeat_timeout_seconds // 2)):
+                new_status = "stale"
+            elif device.status == "error":
+                new_status = "error"
             else:
                 new_status = "online"
             if device.status != new_status:
@@ -132,13 +152,43 @@ class DeviceService:
         self.db.commit()
         return changed
 
-    def list_devices(self, organization_id: int | None = None) -> list[Device]:
+    def list_devices(
+        self,
+        organization_id: int | None = None,
+        status: str | None = None,
+        group_id: int | None = None,
+        tag: str | None = None,
+        version: str | None = None,
+        last_seen_before: datetime | None = None,
+    ) -> list[Device]:
         query = self.db.query(Device)
         if organization_id is not None:
             query = query.filter(Device.organization_id == organization_id)
-        return query.all()
+        if status:
+            query = query.filter(Device.status == status)
+        if version:
+            query = query.filter(Device.version == version)
+        if last_seen_before is not None:
+            query = query.filter(Device.last_seen <= last_seen_before)
+        if group_id is not None:
+            query = query.join(DeviceGroupMember, DeviceGroupMember.device_id == Device.id).filter(
+                DeviceGroupMember.group_id == group_id
+            )
+        if tag:
+            query = query.join(DeviceTagLink, DeviceTagLink.device_id == Device.id).join(
+                DeviceTag, DeviceTag.id == DeviceTagLink.tag_id
+            ).filter(DeviceTag.name == tag)
+        return query.order_by(Device.id.asc()).all()
 
-    def create_group(self, name: str, organization_id: int | None) -> DeviceGroup:
+    def create_group(
+        self,
+        name: str,
+        organization_id: int | None,
+        actor_role: str | None = None,
+    ) -> DeviceGroup:
+        if actor_role is not None:
+            enforce_role_permission(actor_role, "devices.write")
+
         existing = (
             self.db.query(DeviceGroup)
             .filter(
@@ -164,7 +214,15 @@ class DeviceService:
     def get_group(self, group_id: int) -> DeviceGroup | None:
         return self.db.query(DeviceGroup).filter(DeviceGroup.id == group_id).first()
 
-    def assign_group_member(self, group_id: int, device_id: str) -> DeviceGroupMember:
+    def assign_group_member(
+        self,
+        group_id: int,
+        device_id: str,
+        actor_role: str | None = None,
+    ) -> DeviceGroupMember:
+        if actor_role is not None:
+            enforce_role_permission(actor_role, "devices.write")
+
         existing = (
             self.db.query(DeviceGroupMember)
             .filter(
@@ -196,10 +254,18 @@ class DeviceService:
         organization_id: int | None,
         target_version: str | None = None,
         playlist_id: int | None = None,
+        rollout_percentage: int = 100,
+        dry_run: bool = False,
+        actor_role: str | None = None,
     ) -> dict:
+        if actor_role is not None:
+            enforce_role_permission(actor_role, "devices.manage")
+
         valid_actions = {"reboot", "update", "playlist_assign", "rollback"}
         if action not in valid_actions:
             raise ValueError("unsupported action")
+        if rollout_percentage < 1 or rollout_percentage > 100:
+            raise ValueError("rollout_percentage must be between 1 and 100")
 
         group = self.get_group(group_id)
         if not group:
@@ -211,11 +277,43 @@ class DeviceService:
         if action in {"update", "rollback"} and not target_version:
             raise ValueError("target_version is required for update/rollback")
 
+        selected_device_ids = self._select_rollout_devices(device_ids, rollout_percentage)
+
+        incompatible_device_ids: list[str] = []
+        if action in {"update", "rollback"} and target_version:
+            incompatible_device_ids = self._find_incompatible_devices(
+                selected_device_ids,
+                target_version,
+                action,
+            )
+            if incompatible_device_ids:
+                raise ValueError(
+                    "incompatible target_version for devices: "
+                    + ",".join(sorted(incompatible_device_ids))
+                )
+
         details: dict[str, str | int | None] = {"group_id": group_id, "action": action}
         if target_version:
             details["target_version"] = target_version
         if playlist_id is not None:
             details["playlist_id"] = playlist_id
+        details["rollout_percentage"] = rollout_percentage
+        details["selected"] = len(selected_device_ids)
+        details["deferred"] = len(device_ids) - len(selected_device_ids)
+        details["dry_run"] = dry_run
+
+        if dry_run:
+            return {
+                "group_id": group.id,
+                "group_name": group.name,
+                "action": action,
+                "accepted": len(selected_device_ids),
+                "device_ids": selected_device_ids,
+                "deferred_device_ids": [
+                    d for d in device_ids if d not in set(selected_device_ids)
+                ],
+                **details,
+            }
 
         event = EventService(self.db).publish(
             category="device_group",
@@ -224,14 +322,15 @@ class DeviceService:
             payload={
                 "group_id": group_id,
                 "group_name": group.name,
-                "device_ids": device_ids,
+                "device_ids": selected_device_ids,
                 "target_version": target_version,
                 "playlist_id": playlist_id,
+                "rollout_percentage": rollout_percentage,
             },
             organization_id=organization_id,
         )
 
-        for device_id in device_ids:
+        for device_id in selected_device_ids:
             message = f"bulk action={action}"
             if target_version:
                 message += f" target_version={target_version}"
@@ -251,11 +350,54 @@ class DeviceService:
             "group_id": group.id,
             "group_name": group.name,
             "action": action,
-            "accepted": len(device_ids),
-            "device_ids": device_ids,
+            "accepted": len(selected_device_ids),
+            "device_ids": selected_device_ids,
+            "deferred_device_ids": [d for d in device_ids if d not in set(selected_device_ids)],
             "event_id": event["id"],
             **details,
         }
+
+    @staticmethod
+    def _parse_semver(version: str | None) -> tuple[int, int, int] | None:
+        if not version:
+            return None
+        match = re.match(r"^v?(\d+)\.(\d+)\.(\d+)", version.strip())
+        if not match:
+            return None
+        return int(match.group(1)), int(match.group(2)), int(match.group(3))
+
+    def _find_incompatible_devices(
+        self,
+        device_ids: list[str],
+        target_version: str,
+        action: str,
+    ) -> list[str]:
+        target = self._parse_semver(target_version)
+        if not target:
+            return device_ids
+
+        incompatible: list[str] = []
+        for device_id in device_ids:
+            device = self.get_device(device_id)
+            current = self._parse_semver(device.version if device else None)
+            if not current:
+                incompatible.append(device_id)
+                continue
+            if current[0] != target[0]:
+                incompatible.append(device_id)
+                continue
+            if action == "update" and current >= target:
+                incompatible.append(device_id)
+            if action == "rollback" and current <= target:
+                incompatible.append(device_id)
+        return incompatible
+
+    @staticmethod
+    def _select_rollout_devices(device_ids: list[str], rollout_percentage: int) -> list[str]:
+        if not device_ids:
+            return []
+        count = math.ceil(len(device_ids) * rollout_percentage / 100)
+        return sorted(device_ids)[:count]
 
     def record_screenshot(
         self, device_id: str, image_path: str, organization_id: int | None
@@ -286,11 +428,47 @@ class DeviceService:
             .all()
         )
 
+    def create_tag(self, name: str, organization_id: int | None) -> DeviceTag:
+        existing = (
+            self.db.query(DeviceTag)
+            .filter(DeviceTag.name == name, DeviceTag.organization_id == organization_id)
+            .first()
+        )
+        if existing:
+            return existing
+        tag = DeviceTag(name=name, organization_id=organization_id)
+        self.db.add(tag)
+        self.db.commit()
+        self.db.refresh(tag)
+        return tag
+
+    def list_tags(self, organization_id: int | None = None) -> list[DeviceTag]:
+        query = self.db.query(DeviceTag)
+        if organization_id is not None:
+            query = query.filter(DeviceTag.organization_id == organization_id)
+        return query.order_by(DeviceTag.name.asc()).all()
+
+    def assign_tag(self, device_id: str, tag_name: str, organization_id: int | None) -> dict:
+        tag = self.create_tag(tag_name, organization_id)
+        existing = (
+            self.db.query(DeviceTagLink)
+            .filter(DeviceTagLink.device_id == device_id, DeviceTagLink.tag_id == tag.id)
+            .first()
+        )
+        if not existing:
+            self.db.add(DeviceTagLink(device_id=device_id, tag_id=tag.id))
+            self.db.commit()
+        return {"device_id": device_id, "tag_id": tag.id, "tag_name": tag.name}
+
     def create_alert(
         self, level: str, source: str, message: str, organization_id: int | None
     ) -> Alert:
+        normalized_level = (level or "").strip().lower()
+        if normalized_level not in ALERT_LEVELS:
+            raise ValueError(f"unsupported alert level: {level}")
+
         alert = Alert(
-            level=level,
+            level=normalized_level,
             source=source,
             message=message,
             status="open",
@@ -308,14 +486,30 @@ class DeviceService:
         if organization_id is not None:
             query = query.filter(Alert.organization_id == organization_id)
         if status:
-            query = query.filter(Alert.status == status)
+            normalized_status = status.strip().lower()
+            if normalized_status not in ALERT_STATUSES:
+                raise ValueError(f"unsupported alert status: {status}")
+            query = query.filter(Alert.status == normalized_status)
         return query.order_by(Alert.created_at.desc(), Alert.id.desc()).limit(200).all()
 
     def resolve_alert(self, alert_id: int) -> Alert | None:
         alert = self.db.query(Alert).filter(Alert.id == alert_id).first()
         if not alert:
             return None
+        if alert.status == "resolved":
+            return alert
         alert.status = "resolved"
+        self.db.commit()
+        self.db.refresh(alert)
+        return alert
+
+    def acknowledge_alert(self, alert_id: int) -> Alert | None:
+        alert = self.db.query(Alert).filter(Alert.id == alert_id).first()
+        if not alert:
+            return None
+        if alert.status in {"acknowledged", "resolved"}:
+            return alert
+        alert.status = "acknowledged"
         self.db.commit()
         self.db.refresh(alert)
         return alert

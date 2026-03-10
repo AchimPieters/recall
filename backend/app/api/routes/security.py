@@ -1,3 +1,5 @@
+from datetime import datetime
+
 from fastapi import APIRouter, Depends
 from sqlalchemy.orm import Session
 
@@ -40,17 +42,27 @@ def list_security_audit_events(
 )
 def list_audit_logs(
     limit: int = 100,
+    actor_type: str | None = None,
     actor_id: str | None = None,
     action: str | None = None,
     resource_type: str | None = None,
+    resource_id: str | None = None,
+    ip_address: str | None = None,
+    created_from: datetime | None = None,
+    created_to: datetime | None = None,
     db: Session = Depends(get_db),
     user: AuthUser = Depends(get_current_user),
 ):
     rows = SecurityRepository(db).list_audit_logs(
         limit=max(1, min(limit, 500)),
+        actor_type=actor_type,
         actor_id=actor_id,
         action=action,
         resource_type=resource_type,
+        resource_id=resource_id,
+        ip_address=ip_address,
+        created_from=created_from,
+        created_to=created_to,
         organization_id=user.organization_id,
     )
     return [

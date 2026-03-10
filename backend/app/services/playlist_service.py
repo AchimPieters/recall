@@ -1,4 +1,6 @@
 from datetime import datetime, timezone
+import json
+from urllib.parse import urlparse
 
 from sqlalchemy.orm import Session
 
@@ -10,6 +12,8 @@ from backend.app.models.media import (
     PlaylistItem,
     PlaylistRule,
     Schedule,
+    ScheduleBlackoutWindow,
+    ScheduleException,
     Zone,
     ZonePlaylistAssignment,
 )
@@ -44,9 +48,13 @@ class PlaylistService:
     def add_item(
         self,
         playlist_id: int,
-        media_id: int,
+        media_id: int | None,
         position: int | None = None,
         duration_seconds: int | None = None,
+        content_type: str = "image",
+        source_url: str | None = None,
+        widget_config: str | None = None,
+        transition_seconds: int | None = None,
     ) -> PlaylistItem:
         if position is None:
             position = (
@@ -55,11 +63,36 @@ class PlaylistService:
                 .count()
             )
 
+        allowed_content_types = {"image", "video", "web_url", "widget"}
+        if content_type not in allowed_content_types:
+            raise ValueError("unsupported content_type")
+        if content_type in {"image", "video"} and media_id is None:
+            raise ValueError("media_id is required for image/video items")
+        if content_type == "web_url":
+            if not source_url:
+                raise ValueError("source_url is required for web_url items")
+            parsed = urlparse(source_url)
+            if parsed.scheme not in {"http", "https"} or not parsed.netloc:
+                raise ValueError("source_url must be an absolute http(s) URL")
+        if content_type == "widget":
+            if not widget_config:
+                raise ValueError("widget_config is required for widget items")
+            try:
+                parsed_widget = json.loads(widget_config)
+            except json.JSONDecodeError as exc:
+                raise ValueError("widget_config must be valid JSON") from exc
+            if not isinstance(parsed_widget, dict):
+                raise ValueError("widget_config must be a JSON object")
+
         item = PlaylistItem(
             playlist_id=playlist_id,
             media_id=media_id,
+            content_type=content_type,
+            source_url=source_url,
+            widget_config=widget_config,
             position=position,
             duration_seconds=duration_seconds,
+            transition_seconds=transition_seconds,
         )
         self.db.add(item)
         self.db.commit()
@@ -104,6 +137,29 @@ class PlaylistService:
         self.db.refresh(rule)
         return rule
 
+    def _validate_recurrence(self, recurrence: str | None) -> str | None:
+        if recurrence is None:
+            return None
+        value = recurrence.strip().lower()
+        if value in {"once", "daily"}:
+            return value
+        if value.startswith("weekdays:"):
+            raw = value.split(":", 1)[1]
+            if not raw:
+                raise ValueError("weekdays recurrence requires at least one weekday")
+            weekdays: list[int] = []
+            for token in raw.split(","):
+                token = token.strip()
+                if not token.isdigit():
+                    raise ValueError("weekdays recurrence must contain digits 0-6")
+                day = int(token)
+                if day < 0 or day > 6:
+                    raise ValueError("weekdays recurrence must use values 0-6")
+                weekdays.append(day)
+            normalized = ",".join(str(day) for day in sorted(set(weekdays)))
+            return f"weekdays:{normalized}"
+        raise ValueError("unsupported recurrence")
+
     def schedule_playlist(
         self,
         playlist_id: int,
@@ -115,6 +171,7 @@ class PlaylistService:
         timezone_name: str = "UTC",
     ) -> Schedule:
         starts_at, ends_at = self._validate_schedule_window(target, starts_at, ends_at)
+        recurrence = self._validate_recurrence(recurrence)
         schedule = Schedule(
             playlist_id=playlist_id,
             target=target,
@@ -129,6 +186,52 @@ class PlaylistService:
         self.db.refresh(schedule)
         return schedule
 
+    def add_schedule_exception(
+        self,
+        *,
+        schedule_id: int,
+        starts_at: datetime,
+        ends_at: datetime,
+        reason: str | None = None,
+    ) -> ScheduleException:
+        starts_at = self._normalize(starts_at)
+        ends_at = self._normalize(ends_at)
+        if not starts_at or not ends_at or ends_at <= starts_at:
+            raise ValueError("invalid exception window")
+        row = ScheduleException(
+            schedule_id=schedule_id,
+            starts_at=starts_at,
+            ends_at=ends_at,
+            reason=reason,
+        )
+        self.db.add(row)
+        self.db.commit()
+        self.db.refresh(row)
+        return row
+
+    def add_blackout_window(
+        self,
+        *,
+        target: str,
+        starts_at: datetime,
+        ends_at: datetime,
+        reason: str | None = None,
+    ) -> ScheduleBlackoutWindow:
+        starts_at = self._normalize(starts_at)
+        ends_at = self._normalize(ends_at)
+        if not starts_at or not ends_at or ends_at <= starts_at:
+            raise ValueError("invalid blackout window")
+        row = ScheduleBlackoutWindow(
+            target=target,
+            starts_at=starts_at,
+            ends_at=ends_at,
+            reason=reason,
+        )
+        self.db.add(row)
+        self.db.commit()
+        self.db.refresh(row)
+        return row
+
     def _validate_schedule_window(
         self,
         target: str,
@@ -141,7 +244,6 @@ class PlaylistService:
         if starts_at and ends_at and ends_at <= starts_at:
             raise ValueError("ends_at must be after starts_at")
 
-        # Overlaps are allowed; conflict resolution happens via priority at runtime.
         return starts_at, ends_at
 
     def create_layout(self, name: str, definition_json: str) -> Layout:
@@ -154,8 +256,38 @@ class PlaylistService:
     def list_layouts(self) -> list[Layout]:
         return self.db.query(Layout).order_by(Layout.id.asc()).all()
 
+    def _recurrence_matches(self, recurrence: str | None, now: datetime) -> bool:
+        if not recurrence or recurrence in {"once", "daily"}:
+            return True
+        if recurrence.startswith("weekdays:"):
+            values = recurrence.split(":", 1)[1]
+            weekdays = {int(v.strip()) for v in values.split(",") if v.strip().isdigit()}
+            return now.weekday() in weekdays
+        return False
+
+    def _is_blocked_by_exception(self, schedule_id: int, now: datetime) -> bool:
+        rows = self.db.query(ScheduleException).filter(ScheduleException.schedule_id == schedule_id).all()
+        for row in rows:
+            starts_at = self._normalize(row.starts_at)
+            ends_at = self._normalize(row.ends_at)
+            if starts_at and ends_at and starts_at <= now <= ends_at:
+                return True
+        return False
+
+    def _is_blocked_by_blackout(self, target: str, now: datetime) -> bool:
+        rows = self.db.query(ScheduleBlackoutWindow).filter(ScheduleBlackoutWindow.target.in_([target, "all"])).all()
+        for row in rows:
+            starts_at = self._normalize(row.starts_at)
+            ends_at = self._normalize(row.ends_at)
+            if starts_at and ends_at and starts_at <= now <= ends_at:
+                return True
+        return False
+
     def resolve_active_playlist_id_at(self, target: str, at_time: datetime | None = None) -> int | None:
         now = self._normalize(at_time) or self._utc_now()
+        if self._is_blocked_by_blackout(target, now):
+            return None
+
         schedules = self.db.query(Schedule).filter(Schedule.target.in_([target, "all"])).all()
 
         active: list[Schedule] = []
@@ -165,6 +297,10 @@ class PlaylistService:
             if starts_at and starts_at > now:
                 continue
             if ends_at and ends_at < now:
+                continue
+            if not self._recurrence_matches(sched.recurrence, now):
+                continue
+            if self._is_blocked_by_exception(sched.id, now):
                 continue
             active.append(sched)
 
@@ -184,13 +320,25 @@ class PlaylistService:
     def resolve_active_playlist_id(self, target: str) -> int | None:
         return self.resolve_active_playlist_id_at(target, None)
 
+    def validate_playlist_playable(self, playlist_id: int) -> bool:
+        items = self.get_items(playlist_id)
+        if not items:
+            raise ValueError("playlist has no items")
+        for item in items:
+            if item.content_type in {"image", "video"} and item.media_id is None:
+                raise ValueError("playlist contains media item without media_id")
+            if item.content_type == "web_url" and not item.source_url:
+                raise ValueError("playlist contains web_url item without source_url")
+            if item.content_type == "widget" and not item.widget_config:
+                raise ValueError("playlist contains widget item without widget_config")
+        return True
+
     def resolve_for_device(self, device_id: str) -> dict:
-        # 1) schedule has precedence
         scheduled = self.resolve_active_playlist_id(device_id)
         if scheduled:
+            self.validate_playlist_playable(scheduled)
             return {"playlist_id": scheduled, "source": "schedule"}
 
-        # 2) direct device assignment
         device_assignments = (
             self.db.query(PlaylistAssignment)
             .filter(PlaylistAssignment.target_type == "device", PlaylistAssignment.target_id == device_id)
@@ -199,9 +347,9 @@ class PlaylistService:
         )
         if device_assignments:
             first = device_assignments[0]
+            self.validate_playlist_playable(first.playlist_id)
             return {"playlist_id": first.playlist_id, "source": "device_assignment", "fallback": bool(first.is_fallback)}
 
-        # 3) group assignment
         group_ids = [
             str(row.group_id)
             for row in self.db.query(DeviceGroupMember).filter(DeviceGroupMember.device_id == device_id).all()
@@ -215,10 +363,39 @@ class PlaylistService:
             )
             if group_assignments:
                 first = group_assignments[0]
+                self.validate_playlist_playable(first.playlist_id)
                 return {"playlist_id": first.playlist_id, "source": "group_assignment", "fallback": bool(first.is_fallback)}
 
         return {"playlist_id": None, "source": "none"}
 
+
+    def resolve_zone_playback_plan(self, device_id: str) -> list[dict]:
+        layouts = self.list_layouts()
+        if not layouts:
+            return []
+
+        # Pick most recently created layout as active baseline.
+        layout = sorted(layouts, key=lambda l: l.id, reverse=True)[0]
+        preview = self.get_layout_preview(layout.id)
+        zones: list[dict] = []
+        fallback = self.resolve_for_device(device_id).get("playlist_id")
+
+        for zone in preview.get("zones", []):
+            playlist_id = zone.get("playlist_id") or fallback
+            zones.append(
+                {
+                    "layout_id": layout.id,
+                    "layout_name": layout.name,
+                    "zone_id": zone["id"],
+                    "zone_name": zone["name"],
+                    "x": zone["x"],
+                    "y": zone["y"],
+                    "width": zone["width"],
+                    "height": zone["height"],
+                    "playlist_id": playlist_id,
+                }
+            )
+        return zones
 
     def add_zone(
         self,
