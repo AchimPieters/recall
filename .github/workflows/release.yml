@@ -22,11 +22,19 @@ jobs:
       - name: Validate release tag policy
         run: python tools/release_gate_check.py "${GITHUB_REF_NAME}"
 
+      - name: Validate changelog includes release section
+        run: python tools/changelog_release_check.py "${GITHUB_REF_NAME}"
+
       - name: Backend release smoke tests
         run: |
           python -m pip install --upgrade pip
           pip install -r backend/requirements.txt
           pytest -q backend/tests/test_release_gate_check.py backend/tests/test_backup_restore.py
+
+      - name: Agent release smoke tests
+        run: |
+          pip install -r agent/requirements.txt
+          pytest -q agent/tests/test_agent_downloader.py agent/tests/test_agent_recovery.py
 
       - name: Frontend production build
         working-directory: frontend

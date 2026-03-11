@@ -364,3 +364,100 @@ def test_mfa_setup_invalid_code_emits_audit_log() -> None:
         assert len(repo.list_audit_logs(actor_id="mfa-enable-fail-admin", action="auth.mfa.enable.failed")) >= 1
     finally:
         db.close()
+
+
+def test_mfa_setup_lockout_after_repeated_enable_failures(monkeypatch) -> None:
+    _ensure_user("mfa-setup-lock-admin", "AdminPass1!", role="admin")
+    token_admin = create_access_token(subject="mfa-setup-lock-admin", role="admin")
+
+    setup = client.post(
+        "/api/v1/auth/mfa/setup",
+        json={"regenerate": True},
+        headers={"Authorization": f"Bearer {token_admin}"},
+    )
+    assert setup.status_code == 200
+
+    monkeypatch.setattr(auth_routes.settings_conf, "auth_lockout_threshold", 2)
+    try:
+        first = client.post(
+            "/api/v1/auth/mfa/setup",
+            json={"code": "000000"},
+            headers={"Authorization": f"Bearer {token_admin}"},
+        )
+        second = client.post(
+            "/api/v1/auth/mfa/setup",
+            json={"code": "111111"},
+            headers={"Authorization": f"Bearer {token_admin}"},
+        )
+        third = client.post(
+            "/api/v1/auth/mfa/setup",
+            json={"code": "222222"},
+            headers={"Authorization": f"Bearer {token_admin}"},
+        )
+    finally:
+        monkeypatch.setattr(auth_routes.settings_conf, "auth_lockout_threshold", 5)
+
+    assert first.status_code == 401
+    assert second.status_code == 401
+    assert third.status_code == 429
+    assert "MFA setup temporarily locked" in third.json()["detail"]
+
+    db = SessionLocal()
+    try:
+        repo = SecurityRepository(db)
+        assert len(repo.list_audit_logs(actor_id="mfa-setup-lock-admin", action="auth.mfa.enable.failed")) >= 2
+        assert len(repo.list_audit_logs(actor_id="mfa-setup-lock-admin", action="auth.mfa.enable.locked")) >= 1
+    finally:
+        db.close()
+
+
+def test_mfa_setup_lockout_does_not_lock_verify_flow(monkeypatch) -> None:
+    _ensure_user("mfa-lock-scope-admin", "AdminPass1!", role="admin")
+    token_admin = create_access_token(subject="mfa-lock-scope-admin", role="admin")
+
+    setup = client.post(
+        "/api/v1/auth/mfa/setup",
+        json={"regenerate": True},
+        headers={"Authorization": f"Bearer {token_admin}"},
+    )
+    assert setup.status_code == 200
+    secret = setup.json()["secret"]
+
+    enable = client.post(
+        "/api/v1/auth/mfa/setup",
+        json={"code": generate_totp_code(secret)},
+        headers={"Authorization": f"Bearer {token_admin}"},
+    )
+    assert enable.status_code == 200
+
+    monkeypatch.setattr(auth_routes.settings_conf, "auth_lockout_threshold", 1)
+    try:
+        failed_enable = client.post(
+            "/api/v1/auth/mfa/setup",
+            json={"code": "000000"},
+            headers={"Authorization": f"Bearer {token_admin}"},
+        )
+        locked_enable = client.post(
+            "/api/v1/auth/mfa/setup",
+            json={"code": "111111"},
+            headers={"Authorization": f"Bearer {token_admin}"},
+        )
+
+        login = client.post(
+            "/api/v1/token",
+            data={"username": "mfa-lock-scope-admin", "password": "AdminPass1!"},
+            headers={"content-type": "application/x-www-form-urlencoded"},
+        )
+        assert login.status_code == 200
+        mfa_token = login.json()["mfa_token"]
+
+        verify = client.post(
+            "/api/v1/auth/mfa/verify",
+            json={"mfa_token": mfa_token, "code": generate_totp_code(secret)},
+        )
+    finally:
+        monkeypatch.setattr(auth_routes.settings_conf, "auth_lockout_threshold", 5)
+
+    assert failed_enable.status_code == 401
+    assert locked_enable.status_code == 429
+    assert verify.status_code == 200

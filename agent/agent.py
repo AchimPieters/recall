@@ -44,8 +44,9 @@ def sync_once(session: requests.Session) -> None:
     play_zone_plan(config_payload)
 
     media_path = config_payload.get("active_media_path")
+    media_checksum = config_payload.get("active_media_checksum")
     if media_path:
-        local_file = download_asset(session, media_path)
+        local_file = download_asset(session, media_path, expected_checksum=media_checksum)
         config_payload["active_media_local_path"] = str(local_file)
         write_cached_config(config_payload)
         play_from_cache(local_file)

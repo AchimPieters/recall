@@ -96,6 +96,15 @@ Update deze iteratie: auditdekking uitgebreid voor MFA setup/enable/verify(+fail
 Update deze iteratie: regressietest aangescherpt met expliciete audit-assertions op MFA verify failed/locked paden zodat brute-force lockout ook aantoonbaar geaudit wordt (verdere voortgang stap 7).
 Update deze iteratie: MFA verify inputcontract aangescherpt (exact één factor: code óf recovery_code) met regressietests tegen ambigu/missende factor-input (extra voortgang stap 5).
 Update deze iteratie: MFA setup enable-failure pad krijgt nu expliciete security + audit logging (`auth.mfa.enable.failed`) met regressietest (extra voortgang stap 7/5).
+Update deze iteratie: MFA setup enable-pad heeft nu rate limiting + tijdelijke lockout met audit/security logging (`auth.mfa.enable.locked`) en regressietest tegen herhaalde foutieve enable-codes (extra voortgang stap 5/7).
+Update deze iteratie: MFA setup- en verify-lockouts zijn nu gescheiden (aparte counters/locks) zodat setup-abuse geen verify-flow blokkeert; afgedekt met regressietest (extra voortgang stap 5/7).
+Update deze iteratie: Docker runtime is geünificeerd naar `backend/` (legacy `recall-server` paden verwijderd uit Dockerfile/compose), worker entrypoint wijst nu naar `backend.app.workers...`, en compose bevat nu expliciet `recall-agent` (extra voortgang stap 1 en stap 15).
+Update deze iteratie: release pipeline heeft nu een changelog-gate (`tools/changelog_release_check.py`) die bij release tags afdwingt dat `CHANGELOG.md` een overeenkomstige `## vX.Y.Z` sectie bevat, met regressietests en workflow-integratie (extra voortgang stap 22/24/25).
+Update deze iteratie: agent-downloads hebben nu retry-mechanisme met configureerbare backoff/retry-limiet en optionele checksum-validatie (corruptie-detectie), met regressietests voor retry + integrity mismatch (extra voortgang stap 9/24).
+Update deze iteratie: device-config levert nu actieve media-artefactmetadata (`active_media_path` + `active_media_checksum`) uit playlistresolutie, zodat agent-integritychecks end-to-end gevoed worden; afgedekt met fleet-management regressietest (extra voortgang stap 8/9/24).
+Update deze iteratie: device protocol versioning accepteert nu v1-major compatibele versies (zoals `1.2`) en weigert niet-ondersteunde majors (`2.x`) met expliciete foutboodschap; afgedekt met route-regressietests (extra voortgang stap 8).
+Update deze iteratie: OTA rollback governance aangescherpt: rollback target_version moet nu al bekend zijn binnen de device-group versieset (known-good constraint), met regressietest voor reject van onbekende rollback targets (extra voortgang stap 17).
+Update deze iteratie: release- en staging-promotie workflows draaien nu ook expliciete agent smoke-tests naast backend smoke-tests, met dependency-installatiestappen in de workflow zelf (extra voortgang stap 22/24).
 
 ## Remediatieplan per open stap (nu toegevoegd)
 

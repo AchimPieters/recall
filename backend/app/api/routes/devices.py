@@ -19,19 +19,23 @@ router = APIRouter(prefix="/device", tags=["devices"])
 ALLOWED_DEVICE_STATUSES = {"online", "stale", "offline", "error"}
 
 
-SUPPORTED_DEVICE_PROTOCOL_VERSIONS = {"1"}
+SUPPORTED_DEVICE_PROTOCOL_MAJOR = "1"
 
 
 def _validate_device_protocol_version(
     x_device_protocol_version: str | None = Header(default="1"),
 ) -> str:
     version = (x_device_protocol_version or "1").strip()
-    if version not in SUPPORTED_DEVICE_PROTOCOL_VERSIONS:
+    if not version:
+        version = "1"
+
+    major = version.split(".", 1)[0]
+    if major != SUPPORTED_DEVICE_PROTOCOL_MAJOR:
         raise HTTPException(
             status_code=400,
             detail=(
                 f"Unsupported device protocol version '{version}'. "
-                "Supported versions: 1"
+                "Supported major version: 1.x"
             ),
         )
     return version

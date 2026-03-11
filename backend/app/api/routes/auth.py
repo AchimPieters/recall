@@ -34,8 +34,10 @@ settings_conf = get_settings()
 
 failed_login_attempts: dict[str, list[datetime]] = {}
 failed_login_lock = Lock()
-failed_mfa_attempts: dict[str, list[datetime]] = {}
-failed_mfa_lock = Lock()
+failed_mfa_verify_attempts: dict[str, list[datetime]] = {}
+failed_mfa_verify_lock = Lock()
+failed_mfa_setup_attempts: dict[str, list[datetime]] = {}
+failed_mfa_setup_lock = Lock()
 
 
 class RefreshPayload(BaseModel):
@@ -155,33 +157,51 @@ def _clear_failed_logins(username: str) -> None:
 
 
 
-def _prune_failed_mfa_attempts(username: str, now: datetime) -> list[datetime]:
+def _prune_attempts(store: dict[str, list[datetime]], username: str, now: datetime) -> list[datetime]:
     window = timedelta(minutes=settings_conf.auth_lockout_minutes)
-    attempts = failed_mfa_attempts.get(username, [])
+    attempts = store.get(username, [])
     pruned = [attempt for attempt in attempts if now - attempt < window]
     if pruned:
-        failed_mfa_attempts[username] = pruned
+        store[username] = pruned
     else:
-        failed_mfa_attempts.pop(username, None)
+        store.pop(username, None)
     return pruned
 
 
-def _is_mfa_locked_out(username: str, now: datetime) -> bool:
-    with failed_mfa_lock:
-        attempts = _prune_failed_mfa_attempts(username, now)
+def _is_mfa_verify_locked_out(username: str, now: datetime) -> bool:
+    with failed_mfa_verify_lock:
+        attempts = _prune_attempts(failed_mfa_verify_attempts, username, now)
         return len(attempts) >= settings_conf.auth_lockout_threshold
 
 
-def _record_failed_mfa(username: str, now: datetime) -> None:
-    with failed_mfa_lock:
-        attempts = _prune_failed_mfa_attempts(username, now)
+def _record_failed_mfa_verify(username: str, now: datetime) -> None:
+    with failed_mfa_verify_lock:
+        attempts = _prune_attempts(failed_mfa_verify_attempts, username, now)
         attempts.append(now)
-        failed_mfa_attempts[username] = attempts
+        failed_mfa_verify_attempts[username] = attempts
 
 
-def _clear_failed_mfa(username: str) -> None:
-    with failed_mfa_lock:
-        failed_mfa_attempts.pop(username, None)
+def _clear_failed_mfa_verify(username: str) -> None:
+    with failed_mfa_verify_lock:
+        failed_mfa_verify_attempts.pop(username, None)
+
+
+def _is_mfa_setup_locked_out(username: str, now: datetime) -> bool:
+    with failed_mfa_setup_lock:
+        attempts = _prune_attempts(failed_mfa_setup_attempts, username, now)
+        return len(attempts) >= settings_conf.auth_lockout_threshold
+
+
+def _record_failed_mfa_setup(username: str, now: datetime) -> None:
+    with failed_mfa_setup_lock:
+        attempts = _prune_attempts(failed_mfa_setup_attempts, username, now)
+        attempts.append(now)
+        failed_mfa_setup_attempts[username] = attempts
+
+
+def _clear_failed_mfa_setup(username: str) -> None:
+    with failed_mfa_setup_lock:
+        failed_mfa_setup_attempts.pop(username, None)
 
 def _write_auth_audit(
     sec_repo: SecurityRepository,
@@ -562,6 +582,7 @@ def activate_user(
 
 
 @router.post("/auth/mfa/setup", dependencies=[Depends(require_role("admin"))])
+@limiter.limit("30/minute")
 def mfa_setup(
     payload: MFASetupPayload,
     request: Request,
@@ -587,7 +608,26 @@ def mfa_setup(
     client_ip = request.client.host if request.client else None
 
     if payload.code:
+        now = datetime.now(timezone.utc)
+        if _is_mfa_setup_locked_out(user.username, now):
+            sec_repo.add_security_event(
+                actor=user.username,
+                event_type="mfa_enable_locked",
+                detail="Too many invalid MFA setup attempts",
+                ip_address=client_ip,
+            )
+            _write_auth_audit(
+                sec_repo,
+                actor_id=user.username,
+                action="auth.mfa.enable.locked",
+                resource_type="user",
+                resource_id=user.username,
+                ip_address=client_ip,
+            )
+            raise HTTPException(status_code=429, detail="MFA setup temporarily locked")
+
         if not verify_totp_code(secret, payload.code):
+            _record_failed_mfa_setup(user.username, now)
             sec_repo.add_security_event(
                 actor=user.username,
                 event_type="mfa_enable_failed",
@@ -603,6 +643,7 @@ def mfa_setup(
                 ip_address=client_ip,
             )
             raise HTTPException(status_code=401, detail="Invalid MFA code")
+        _clear_failed_mfa_setup(user.username)
         entity.mfa_enabled = True
         db.commit()
         sec_repo.add_security_event(
@@ -674,7 +715,7 @@ def mfa_verify(
         raise HTTPException(status_code=403, detail="MFA not configured")
 
     now = datetime.now(timezone.utc)
-    if _is_mfa_locked_out(username, now):
+    if _is_mfa_verify_locked_out(username, now):
         sec_repo.add_security_event(
             actor=username,
             event_type="mfa_locked",
@@ -693,7 +734,7 @@ def mfa_verify(
 
     valid = verify_totp_code(user.mfa_secret, payload.code or "") or _verify_recovery_code(user, payload.recovery_code)
     if not valid:
-        _record_failed_mfa(username, now)
+        _record_failed_mfa_verify(username, now)
         sec_repo.add_security_event(
             actor=username,
             event_type="mfa_verify_failed",
@@ -711,7 +752,7 @@ def mfa_verify(
         db.commit()
         raise HTTPException(status_code=401, detail="Invalid MFA code")
 
-    _clear_failed_mfa(username)
+    _clear_failed_mfa_verify(username)
     access = create_access_token(subject=user.username, role=user.role)
     refresh, jti = create_refresh_token(subject=user.username)
     refresh_exp = datetime.now(timezone.utc) + timedelta(minutes=settings_conf.refresh_token_expire_minutes)

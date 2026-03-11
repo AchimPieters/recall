@@ -182,15 +182,24 @@ class DeviceService:
 
     def get_config(self, device_id: str) -> dict:
         playlist_service = PlaylistService(self.db)
-        playlist_id = playlist_service.resolve_active_playlist_id(device_id)
+        resolved = playlist_service.resolve_for_device(device_id)
+        playlist_id = resolved.get("playlist_id")
         zone_plan = playlist_service.resolve_zone_playback_plan(device_id)
-        return {
+        payload = {
             "device_id": device_id,
             "heartbeat_interval": 30,
             "fallback_content": "default",
             "active_playlist_id": playlist_id,
             "zone_plan": zone_plan,
         }
+
+        active_media = playlist_service.resolve_active_media_asset(device_id)
+        if active_media:
+            payload["active_media_id"] = active_media.get("media_id")
+            payload["active_media_path"] = active_media.get("path")
+            payload["active_media_checksum"] = active_media.get("checksum")
+
+        return payload
 
     def add_log(
         self, device_id: str, level: str, action: str, message: str
@@ -375,6 +384,14 @@ class DeviceService:
         selected_device_ids = select_rollout_devices(device_ids, rollout_percentage)
 
         incompatible_device_ids: list[str] = []
+        if action == "rollback" and target_version:
+            known_versions = self._group_known_versions(device_ids)
+            if target_version not in known_versions:
+                raise ValueError(
+                    "unknown rollback target_version for group: "
+                    f"{target_version}"
+                )
+
         if action in {"update", "rollback"} and target_version:
             incompatible_device_ids = self._find_incompatible_devices(
                 selected_device_ids,
@@ -463,6 +480,17 @@ class DeviceService:
         if not match:
             return None
         return int(match.group(1)), int(match.group(2)), int(match.group(3))
+
+
+    def _group_known_versions(self, device_ids: list[str]) -> set[str]:
+        if not device_ids:
+            return set()
+        rows = (
+            self.db.query(Device.version)
+            .filter(Device.id.in_(device_ids), Device.version.isnot(None))
+            .all()
+        )
+        return {str(row[0]) for row in rows if row and row[0]}
 
     def _find_incompatible_devices(
         self,

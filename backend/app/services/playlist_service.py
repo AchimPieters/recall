@@ -7,6 +7,8 @@ from backend.app.domain import normalize_datetime, validate_content_item, valida
 from backend.app.models.device import DeviceGroupMember
 from backend.app.models.media import (
     Layout,
+    Media,
+    MediaVersion,
     Playlist,
     PlaylistAssignment,
     PlaylistItem,
@@ -345,6 +347,40 @@ class PlaylistService:
 
         return {"playlist_id": None, "source": "none"}
 
+
+
+    def resolve_active_media_asset(self, device_id: str) -> dict | None:
+        resolved = self.resolve_for_device(device_id)
+        playlist_id = resolved.get("playlist_id")
+        if not playlist_id:
+            return None
+
+        item = (
+            self.db.query(PlaylistItem)
+            .filter(PlaylistItem.playlist_id == playlist_id, PlaylistItem.media_id.isnot(None))
+            .order_by(PlaylistItem.position.asc(), PlaylistItem.id.asc())
+            .first()
+        )
+        if not item or not item.media_id:
+            return None
+
+        media = self.db.query(Media).filter(Media.id == item.media_id).first()
+        if not media:
+            return None
+
+        latest = (
+            self.db.query(MediaVersion)
+            .filter(MediaVersion.media_id == media.id)
+            .order_by(MediaVersion.version.desc(), MediaVersion.id.desc())
+            .first()
+        )
+
+        return {
+            "media_id": media.id,
+            "path": (latest.path if latest else media.path),
+            "checksum": (latest.checksum if latest else None),
+            "playlist_id": playlist_id,
+        }
 
     def resolve_zone_playback_plan(self, device_id: str) -> list[dict]:
         layouts = self.list_layouts()
