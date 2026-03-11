@@ -53,7 +53,7 @@ Every table that contains tenant data carries `organization_id` + query enforcem
 - **Targets**: docker-compose (dev/prod) and Kubernetes manifests.
 
 ## 7) Migration strategy from current repo
-This repository currently contains legacy `recall-server/` and static UI pages. The v2 migration is executed incrementally:
+This repository now uses `backend/` as the canonical server runtime. Legacy runtime paths have been removed.
 1. Keep existing runtime stable.
 2. Introduce new directories and docs/contracts.
 3. Move domain-by-domain into new modules.

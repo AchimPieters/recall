@@ -1,0 +1,53 @@
+name: Environment Promotion
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Release version (e.g. v1.2.0)'
+        required: true
+      image_tag:
+        description: 'Container image tag'
+        required: true
+
+jobs:
+  deploy-dev:
+    name: Deploy to dev
+    runs-on: ubuntu-latest
+    environment: dev
+    steps:
+      - uses: actions/checkout@v4
+      - name: Validate inputs
+        run: |
+          python tools/release_gate_check.py "${{ inputs.version }}"
+      - name: Deploy dev
+        run: |
+          echo "Deploying version=${{ inputs.version }} image=${{ inputs.image_tag }} to dev"
+
+  deploy-staging:
+    name: Promote to staging
+    runs-on: ubuntu-latest
+    environment: staging
+    needs: [deploy-dev]
+    steps:
+      - uses: actions/checkout@v4
+      - name: Run staging smoke checks
+        run: |
+          pytest -q backend/tests/test_release_gate_check.py backend/tests/test_backup_restore.py
+      - name: Deploy staging
+        run: |
+          echo "Promoting version=${{ inputs.version }} image=${{ inputs.image_tag }} to staging"
+
+  deploy-production:
+    name: Promote to production
+    runs-on: ubuntu-latest
+    environment: production
+    needs: [deploy-staging]
+    steps:
+      - uses: actions/checkout@v4
+      - name: Production gate
+        run: |
+          echo "All lower environments passed; production promotion approved by environment protection rules."
+      - name: Deploy production
+        run: |
+          echo "Promoting version=${{ inputs.version }} image=${{ inputs.image_tag }} to production"

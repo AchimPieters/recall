@@ -2,6 +2,7 @@ from fastapi.testclient import TestClient
 
 from backend.app.api.main import app
 from backend.app.api.routes import auth as auth_routes
+from backend.app.core.mfa import generate_totp_code
 from backend.app.core.security import create_access_token, get_password_hash
 from backend.app.db.database import Base, SessionLocal, engine
 from backend.app.models import User
@@ -29,7 +30,7 @@ def _ensure_user(username: str, password: str, role: str = "viewer", active: boo
 
 
 def test_logout_revokes_refresh_token() -> None:
-    _ensure_user("auth-user", "AuthPass1!", role="admin")
+    _ensure_user("auth-user", "AuthPass1!", role="viewer")
 
     login = client.post(
         "/api/v1/token",
@@ -107,6 +108,7 @@ def test_password_reset_request_hides_token_outside_dev(monkeypatch) -> None:
 
 def test_auth_endpoints_emit_audit_logs() -> None:
     _ensure_user("audit-admin", "AdminPass1!", role="admin")
+    _ensure_user("audit-user", "UserPass1!", role="viewer")
     _ensure_user("audit-reset", "ResetPass1!", role="viewer")
 
     # password reset request/confirm
@@ -123,7 +125,7 @@ def test_auth_endpoints_emit_audit_logs() -> None:
     # logout writes auth.logout
     login = client.post(
         "/api/v1/token",
-        data={"username": "audit-admin", "password": "AdminPass1!"},
+        data={"username": "audit-user", "password": "UserPass1!"},
         headers={"content-type": "application/x-www-form-urlencoded"},
     )
     refresh = login.json()["refresh_token"]
@@ -139,12 +141,226 @@ def test_auth_endpoints_emit_audit_logs() -> None:
     )
     assert act.status_code == 200
 
+    # mfa setup/enable/verify writes auth.mfa.* actions
+    setup = client.post(
+        "/api/v1/auth/mfa/setup",
+        json={"regenerate": True},
+        headers={"Authorization": f"Bearer {token_admin}"},
+    )
+    assert setup.status_code == 200
+    secret = setup.json()["secret"]
+
+    enable = client.post(
+        "/api/v1/auth/mfa/setup",
+        json={"code": generate_totp_code(secret)},
+        headers={"Authorization": f"Bearer {token_admin}"},
+    )
+    assert enable.status_code == 200
+
+    login_admin = client.post(
+        "/api/v1/token",
+        data={"username": "audit-admin", "password": "AdminPass1!"},
+        headers={"content-type": "application/x-www-form-urlencoded"},
+    )
+    assert login_admin.status_code == 200
+    mfa_token = login_admin.json()["mfa_token"]
+
+    verify = client.post(
+        "/api/v1/auth/mfa/verify",
+        json={"mfa_token": mfa_token, "code": generate_totp_code(secret)},
+    )
+    assert verify.status_code == 200
+
     db = SessionLocal()
     try:
         repo = SecurityRepository(db)
         assert len(repo.list_audit_logs(actor_id="audit-reset", action="auth.password_reset.request")) >= 1
         assert len(repo.list_audit_logs(actor_id="audit-reset", action="auth.password_reset.confirm")) >= 1
-        assert len(repo.list_audit_logs(actor_id="audit-admin", action="auth.logout")) >= 1
+        assert len(repo.list_audit_logs(actor_id="audit-user", action="auth.logout")) >= 1
         assert len(repo.list_audit_logs(actor_id="audit-admin", action="auth.activate")) >= 1
+        assert len(repo.list_audit_logs(actor_id="audit-admin", action="auth.mfa.setup")) >= 1
+        assert len(repo.list_audit_logs(actor_id="audit-admin", action="auth.mfa.enable")) >= 1
+        assert len(repo.list_audit_logs(actor_id="audit-admin", action="auth.mfa.verify")) >= 1
+    finally:
+        db.close()
+
+
+def test_admin_login_requires_mfa_and_verify_flow() -> None:
+    _ensure_user("mfa-admin", "AdminPass1!", role="admin")
+    token_admin = create_access_token(subject="mfa-admin", role="admin")
+
+    setup = client.post(
+        "/api/v1/auth/mfa/setup",
+        json={"regenerate": True},
+        headers={"Authorization": f"Bearer {token_admin}"},
+    )
+    assert setup.status_code == 200
+    secret = setup.json()["secret"]
+
+    enable = client.post(
+        "/api/v1/auth/mfa/setup",
+        json={"code": generate_totp_code(secret)},
+        headers={"Authorization": f"Bearer {token_admin}"},
+    )
+    assert enable.status_code == 200
+    assert enable.json()["status"] == "mfa_enabled"
+
+    login = client.post(
+        "/api/v1/token",
+        data={"username": "mfa-admin", "password": "AdminPass1!"},
+        headers={"content-type": "application/x-www-form-urlencoded"},
+    )
+    assert login.status_code == 200
+    assert login.json()["mfa_required"] is True
+    mfa_token = login.json()["mfa_token"]
+
+    verify = client.post(
+        "/api/v1/auth/mfa/verify",
+        json={"mfa_token": mfa_token, "code": generate_totp_code(secret)},
+    )
+    assert verify.status_code == 200
+    assert "access_token" in verify.json()
+    assert "refresh_token" in verify.json()
+
+
+def test_admin_without_mfa_is_blocked() -> None:
+    _ensure_user("blocked-admin", "AdminPass1!", role="admin")
+
+    login = client.post(
+        "/api/v1/token",
+        data={"username": "blocked-admin", "password": "AdminPass1!"},
+        headers={"content-type": "application/x-www-form-urlencoded"},
+    )
+    assert login.status_code == 403
+    assert "MFA setup required" in login.json()["detail"]
+
+
+def test_mfa_verify_lockout_after_repeated_failures(monkeypatch) -> None:
+    _ensure_user("mfa-lock-admin", "AdminPass1!", role="admin")
+    token_admin = create_access_token(subject="mfa-lock-admin", role="admin")
+
+    setup = client.post(
+        "/api/v1/auth/mfa/setup",
+        json={"regenerate": True},
+        headers={"Authorization": f"Bearer {token_admin}"},
+    )
+    assert setup.status_code == 200
+    secret = setup.json()["secret"]
+
+    enable = client.post(
+        "/api/v1/auth/mfa/setup",
+        json={"code": generate_totp_code(secret)},
+        headers={"Authorization": f"Bearer {token_admin}"},
+    )
+    assert enable.status_code == 200
+
+    login = client.post(
+        "/api/v1/token",
+        data={"username": "mfa-lock-admin", "password": "AdminPass1!"},
+        headers={"content-type": "application/x-www-form-urlencoded"},
+    )
+    assert login.status_code == 200
+    mfa_token = login.json()["mfa_token"]
+
+    monkeypatch.setattr(auth_routes.settings_conf, "auth_lockout_threshold", 2)
+    try:
+        first = client.post(
+            "/api/v1/auth/mfa/verify",
+            json={"mfa_token": mfa_token, "code": "000000"},
+        )
+        second = client.post(
+            "/api/v1/auth/mfa/verify",
+            json={"mfa_token": mfa_token, "code": "111111"},
+        )
+        third = client.post(
+            "/api/v1/auth/mfa/verify",
+            json={"mfa_token": mfa_token, "code": "222222"},
+        )
+    finally:
+        monkeypatch.setattr(auth_routes.settings_conf, "auth_lockout_threshold", 5)
+
+    assert first.status_code == 401
+    assert second.status_code == 401
+    assert third.status_code == 429
+    assert "MFA temporarily locked" in third.json()["detail"]
+
+    db = SessionLocal()
+    try:
+        repo = SecurityRepository(db)
+        assert len(repo.list_audit_logs(actor_id="mfa-lock-admin", action="auth.mfa.verify.failed")) >= 2
+        assert len(repo.list_audit_logs(actor_id="mfa-lock-admin", action="auth.mfa.verify.locked")) >= 1
+    finally:
+        db.close()
+
+
+def test_mfa_verify_requires_exactly_one_factor() -> None:
+    _ensure_user("mfa-factor-admin", "AdminPass1!", role="admin")
+    token_admin = create_access_token(subject="mfa-factor-admin", role="admin")
+
+    setup = client.post(
+        "/api/v1/auth/mfa/setup",
+        json={"regenerate": True},
+        headers={"Authorization": f"Bearer {token_admin}"},
+    )
+    assert setup.status_code == 200
+    secret = setup.json()["secret"]
+    recovery_code = setup.json()["recovery_codes"][0]
+
+    enable = client.post(
+        "/api/v1/auth/mfa/setup",
+        json={"code": generate_totp_code(secret)},
+        headers={"Authorization": f"Bearer {token_admin}"},
+    )
+    assert enable.status_code == 200
+
+    login = client.post(
+        "/api/v1/token",
+        data={"username": "mfa-factor-admin", "password": "AdminPass1!"},
+        headers={"content-type": "application/x-www-form-urlencoded"},
+    )
+    assert login.status_code == 200
+    mfa_token = login.json()["mfa_token"]
+
+    none_factor = client.post(
+        "/api/v1/auth/mfa/verify",
+        json={"mfa_token": mfa_token},
+    )
+    both_factors = client.post(
+        "/api/v1/auth/mfa/verify",
+        json={
+            "mfa_token": mfa_token,
+            "code": generate_totp_code(secret),
+            "recovery_code": recovery_code,
+        },
+    )
+
+    assert none_factor.status_code == 400
+    assert "Either code or recovery_code is required" in none_factor.json()["detail"]
+    assert both_factors.status_code == 400
+    assert "Provide either code or recovery_code" in both_factors.json()["detail"]
+
+
+def test_mfa_setup_invalid_code_emits_audit_log() -> None:
+    _ensure_user("mfa-enable-fail-admin", "AdminPass1!", role="admin")
+    token_admin = create_access_token(subject="mfa-enable-fail-admin", role="admin")
+
+    setup = client.post(
+        "/api/v1/auth/mfa/setup",
+        json={"regenerate": True},
+        headers={"Authorization": f"Bearer {token_admin}"},
+    )
+    assert setup.status_code == 200
+
+    failed_enable = client.post(
+        "/api/v1/auth/mfa/setup",
+        json={"code": "000000"},
+        headers={"Authorization": f"Bearer {token_admin}"},
+    )
+    assert failed_enable.status_code == 401
+
+    db = SessionLocal()
+    try:
+        repo = SecurityRepository(db)
+        assert len(repo.list_audit_logs(actor_id="mfa-enable-fail-admin", action="auth.mfa.enable.failed")) >= 1
     finally:
         db.close()

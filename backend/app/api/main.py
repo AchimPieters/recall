@@ -12,8 +12,6 @@ from fastapi.staticfiles import StaticFiles
 from prometheus_client import Histogram
 from slowapi.errors import RateLimitExceeded
 from slowapi.extension import _rate_limit_exceeded_handler
-from sqlalchemy import text
-from sqlalchemy.exc import OperationalError, ProgrammingError
 
 from backend.app.api.routes import (
     auth,
@@ -28,7 +26,8 @@ from backend.app.api.routes import (
     system,
 )
 from backend.app.core.config import get_settings
-from backend.app.db.database import Base, engine, get_db
+from backend.app.core.tracing import init_tracing
+from backend.app.db.database import engine, get_db
 from backend.app.db.migrate import apply_sql_migrations
 
 settings_conf = get_settings()
@@ -48,27 +47,12 @@ def _bootstrap_admin() -> None:
         db_gen.close()
 
 
-def _ensure_runtime_schema_compat() -> None:
-    with engine.begin() as conn:
-        statements = [
-            "ALTER TABLE events ADD COLUMN organization_id INTEGER",
-            "ALTER TABLE alerts ADD COLUMN organization_id INTEGER",
-            "ALTER TABLE device_screenshots ADD COLUMN organization_id INTEGER",
-            "ALTER TABLE device_groups ADD COLUMN organization_id INTEGER",
-        ]
-        for statement in statements:
-            try:
-                conn.execute(text(statement))
-            except (OperationalError, ProgrammingError):
-                pass
-
-
 @asynccontextmanager
 async def lifespan(_: FastAPI):
     if settings_conf.auto_create_schema:
         apply_sql_migrations(engine)
-        Base.metadata.create_all(bind=engine)
-        _ensure_runtime_schema_compat()
+    tracing_enabled = init_tracing("recall-api")
+    logger.info("tracing", enabled=tracing_enabled)
     _bootstrap_admin()
     logger.info("startup", action="bootstrap", status="ok")
     yield

@@ -1,6 +1,7 @@
 from datetime import datetime, timedelta, timezone
-import math
+import hashlib
 import re
+import secrets
 from uuid import uuid4
 from sqlalchemy.orm import Session
 from backend.app.core.auth import enforce_role_permission
@@ -14,9 +15,19 @@ from backend.app.models.device import (
     DeviceScreenshot,
     DeviceTag,
     DeviceTagLink,
+    DeviceProvisioningToken,
+    DeviceCertificate,
 )
 from backend.app.services.playlist_service import PlaylistService
 from backend.app.services.event_service import EventService
+from backend.app.core.events import (
+    ALERT_TRIGGERED,
+    DEVICE_REGISTERED,
+    OTA_UPDATE_STARTED,
+    make_event,
+    publisher,
+)
+from backend.app.domain import select_rollout_devices
 
 settings = get_settings()
 
@@ -42,6 +53,89 @@ class DeviceService:
             return dt.replace(tzinfo=timezone.utc)
         return dt
 
+
+
+    @staticmethod
+    def _hash_value(value: str) -> str:
+        return hashlib.sha256(value.encode("utf-8")).hexdigest()
+
+    def create_provisioning_token(
+        self,
+        *,
+        actor: str,
+        organization_id: int | None,
+        expires_in_minutes: int = 30,
+    ) -> dict:
+        expires_in_minutes = max(1, min(expires_in_minutes, 24 * 60))
+        raw_token = secrets.token_urlsafe(24)
+        token_hash = self._hash_value(raw_token)
+        expires_at = self._utc_now() + timedelta(minutes=expires_in_minutes)
+        row = DeviceProvisioningToken(
+            token_hash=token_hash,
+            organization_id=organization_id,
+            expires_at=expires_at,
+            created_by=actor,
+        )
+        self.db.add(row)
+        self.db.commit()
+        self.db.refresh(row)
+        return {
+            "token": raw_token,
+            "expires_at": row.expires_at,
+            "organization_id": row.organization_id,
+            "id": row.id,
+        }
+
+    def enroll_device_with_token(
+        self,
+        *,
+        provisioning_token: str,
+        device_id: str,
+        name: str,
+        ip: str | None,
+        version: str | None,
+        capabilities: dict | None = None,
+    ) -> dict:
+        token_hash = self._hash_value(provisioning_token)
+        token_row = (
+            self.db.query(DeviceProvisioningToken)
+            .filter(DeviceProvisioningToken.token_hash == token_hash)
+            .first()
+        )
+        now = self._utc_now()
+        if not token_row or token_row.used_at is not None or self._normalize(token_row.expires_at) < now:
+            raise ValueError("invalid or expired provisioning token")
+
+        device = self.register(
+            device_id=device_id,
+            name=name,
+            ip=ip,
+            version=version,
+            organization_id=token_row.organization_id,
+            capabilities=capabilities,
+        )
+
+        cert_seed = f"{device.id}:{now.isoformat()}:{secrets.token_hex(16)}"
+        fingerprint = self._hash_value(cert_seed)
+        certificate_pem = f"-----BEGIN DEVICE CERTIFICATE-----\n{fingerprint}\n-----END DEVICE CERTIFICATE-----"
+        cert = DeviceCertificate(
+            device_id=device.id,
+            certificate_pem=certificate_pem,
+            fingerprint=fingerprint,
+            issued_at=now,
+            expires_at=now + timedelta(days=365),
+        )
+        token_row.used_at = now
+        self.db.add(cert)
+        self.db.commit()
+
+        return {
+            "device_id": device.id,
+            "organization_id": device.organization_id,
+            "certificate": certificate_pem,
+            "certificate_fingerprint": fingerprint,
+            "provisioned_at": now.isoformat(),
+        }
     def register(
         self,
         device_id: str,
@@ -65,6 +159,7 @@ class DeviceService:
         device.last_seen = self._utc_now()
         self.db.commit()
         self.db.refresh(device)
+        publisher.publish(make_event(DEVICE_REGISTERED, {"device_id": device_id, "organization_id": organization_id}))
         return device
 
     def heartbeat(self, device_id: str, metrics: dict | None = None) -> Device | None:
@@ -277,7 +372,7 @@ class DeviceService:
         if action in {"update", "rollback"} and not target_version:
             raise ValueError("target_version is required for update/rollback")
 
-        selected_device_ids = self._select_rollout_devices(device_ids, rollout_percentage)
+        selected_device_ids = select_rollout_devices(device_ids, rollout_percentage)
 
         incompatible_device_ids: list[str] = []
         if action in {"update", "rollback"} and target_version:
@@ -329,6 +424,9 @@ class DeviceService:
             },
             organization_id=organization_id,
         )
+
+        if action == "update":
+            publisher.publish(make_event(OTA_UPDATE_STARTED, {"group_id": group_id, "target_version": target_version, "device_ids": selected_device_ids}))
 
         for device_id in selected_device_ids:
             message = f"bulk action={action}"
@@ -391,13 +489,6 @@ class DeviceService:
             if action == "rollback" and current <= target:
                 incompatible.append(device_id)
         return incompatible
-
-    @staticmethod
-    def _select_rollout_devices(device_ids: list[str], rollout_percentage: int) -> list[str]:
-        if not device_ids:
-            return []
-        count = math.ceil(len(device_ids) * rollout_percentage / 100)
-        return sorted(device_ids)[:count]
 
     def record_screenshot(
         self, device_id: str, image_path: str, organization_id: int | None
@@ -477,6 +568,7 @@ class DeviceService:
         self.db.add(alert)
         self.db.commit()
         self.db.refresh(alert)
+        publisher.publish(make_event(ALERT_TRIGGERED, {"alert_id": alert.id, "level": normalized_level}))
         return alert
 
     def list_alerts(
