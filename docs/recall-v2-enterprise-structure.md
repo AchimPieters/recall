@@ -57,7 +57,7 @@ recall/
 ```
 
 ## Migratie-aanpak
-- Huidige code in `recall-server/` blijft tijdelijk bestaan als compatibiliteitslaag.
+- Legacy `recall-server/` compatibiliteitslaag is verwijderd; `backend/` is leidend.
 - Nieuwe features worden eerst in v2-structuur gebouwd, daarna worden legacy modules uitgefaseerd.
 - Gebruik adapter-routes waar nodig zodat bestaande agents niet direct breken.
 

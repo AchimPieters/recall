@@ -1,12 +1,14 @@
 from datetime import datetime, timezone
-import json
-from urllib.parse import urlparse
 
 from sqlalchemy.orm import Session
 
+from backend.app.core.events import PLAYLIST_UPDATED, make_event, publisher
+from backend.app.domain import normalize_datetime, validate_content_item, validate_schedule_window
 from backend.app.models.device import DeviceGroupMember
 from backend.app.models.media import (
     Layout,
+    Media,
+    MediaVersion,
     Playlist,
     PlaylistAssignment,
     PlaylistItem,
@@ -29,11 +31,7 @@ class PlaylistService:
 
     @staticmethod
     def _normalize(dt: datetime | None) -> datetime | None:
-        if dt is None:
-            return None
-        if dt.tzinfo is None:
-            return dt.replace(tzinfo=timezone.utc)
-        return dt
+        return normalize_datetime(dt)
 
     def create_playlist(self, name: str) -> Playlist:
         playlist = Playlist(name=name)
@@ -63,26 +61,12 @@ class PlaylistService:
                 .count()
             )
 
-        allowed_content_types = {"image", "video", "web_url", "widget"}
-        if content_type not in allowed_content_types:
-            raise ValueError("unsupported content_type")
-        if content_type in {"image", "video"} and media_id is None:
-            raise ValueError("media_id is required for image/video items")
-        if content_type == "web_url":
-            if not source_url:
-                raise ValueError("source_url is required for web_url items")
-            parsed = urlparse(source_url)
-            if parsed.scheme not in {"http", "https"} or not parsed.netloc:
-                raise ValueError("source_url must be an absolute http(s) URL")
-        if content_type == "widget":
-            if not widget_config:
-                raise ValueError("widget_config is required for widget items")
-            try:
-                parsed_widget = json.loads(widget_config)
-            except json.JSONDecodeError as exc:
-                raise ValueError("widget_config must be valid JSON") from exc
-            if not isinstance(parsed_widget, dict):
-                raise ValueError("widget_config must be a JSON object")
+        validate_content_item(
+            content_type=content_type,
+            media_id=media_id,
+            source_url=source_url,
+            widget_config=widget_config,
+        )
 
         item = PlaylistItem(
             playlist_id=playlist_id,
@@ -97,6 +81,7 @@ class PlaylistService:
         self.db.add(item)
         self.db.commit()
         self.db.refresh(item)
+        publisher.publish(make_event(PLAYLIST_UPDATED, {"playlist_id": playlist_id, "item_id": item.id}))
         return item
 
     def get_items(self, playlist_id: int) -> list[PlaylistItem]:
@@ -238,13 +223,7 @@ class PlaylistService:
         starts_at: datetime | None,
         ends_at: datetime | None,
     ) -> tuple[datetime | None, datetime | None]:
-        starts_at = self._normalize(starts_at)
-        ends_at = self._normalize(ends_at)
-
-        if starts_at and ends_at and ends_at <= starts_at:
-            raise ValueError("ends_at must be after starts_at")
-
-        return starts_at, ends_at
+        return validate_schedule_window(starts_at, ends_at)
 
     def create_layout(self, name: str, definition_json: str) -> Layout:
         layout = Layout(name=name, definition_json=definition_json)
@@ -368,6 +347,40 @@ class PlaylistService:
 
         return {"playlist_id": None, "source": "none"}
 
+
+
+    def resolve_active_media_asset(self, device_id: str) -> dict | None:
+        resolved = self.resolve_for_device(device_id)
+        playlist_id = resolved.get("playlist_id")
+        if not playlist_id:
+            return None
+
+        item = (
+            self.db.query(PlaylistItem)
+            .filter(PlaylistItem.playlist_id == playlist_id, PlaylistItem.media_id.isnot(None))
+            .order_by(PlaylistItem.position.asc(), PlaylistItem.id.asc())
+            .first()
+        )
+        if not item or not item.media_id:
+            return None
+
+        media = self.db.query(Media).filter(Media.id == item.media_id).first()
+        if not media:
+            return None
+
+        latest = (
+            self.db.query(MediaVersion)
+            .filter(MediaVersion.media_id == media.id)
+            .order_by(MediaVersion.version.desc(), MediaVersion.id.desc())
+            .first()
+        )
+
+        return {
+            "media_id": media.id,
+            "path": (latest.path if latest else media.path),
+            "checksum": (latest.checksum if latest else None),
+            "playlist_id": playlist_id,
+        }
 
     def resolve_zone_playback_plan(self, device_id: str) -> list[dict]:
         layouts = self.list_layouts()

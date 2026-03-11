@@ -1,8 +1,10 @@
 from celery import Celery
 
 from backend.app.core.config import get_settings
+from backend.app.core.tracing import init_tracing
 
 settings = get_settings()
+init_tracing("recall-worker")
 
 celery_app = Celery(
     "recall",

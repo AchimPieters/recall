@@ -94,3 +94,19 @@ def clamav_scan(
             return "OK" in response
     except OSError:
         return fail_open
+
+
+def create_mfa_token(subject: str, expires_delta: timedelta | None = None) -> str:
+    expire = datetime.now(timezone.utc) + (expires_delta or timedelta(minutes=5))
+    payload = {"sub": subject, "exp": expire, "type": "mfa"}
+    return jwt.encode(payload, settings.jwt_secret, algorithm=settings.jwt_algorithm)
+
+
+def parse_mfa_token(token: str) -> str:
+    payload = jwt.decode(token, settings.jwt_secret, algorithms=[settings.jwt_algorithm])
+    if payload.get("type") != "mfa":
+        raise ValueError("Invalid token type")
+    subject = payload.get("sub")
+    if not subject:
+        raise ValueError("Malformed mfa token")
+    return str(subject)

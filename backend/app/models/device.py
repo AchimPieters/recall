@@ -103,3 +103,26 @@ class DeviceScreenshot(Base):
     device_id: Mapped[str] = mapped_column(ForeignKey("devices.id"), index=True)
     image_path: Mapped[str] = mapped_column(String(1024), nullable=False)
     captured_at: Mapped[datetime] = mapped_column(DateTime, default=utc_now)
+
+
+class DeviceProvisioningToken(Base):
+    __tablename__ = "device_provisioning_tokens"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    token_hash: Mapped[str] = mapped_column(String(64), unique=True, index=True)
+    organization_id: Mapped[int | None] = mapped_column(Integer, nullable=True, index=True)
+    expires_at: Mapped[datetime] = mapped_column(DateTime, nullable=False)
+    used_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    created_by: Mapped[str] = mapped_column(String(255), default="system")
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=utc_now)
+
+
+class DeviceCertificate(Base):
+    __tablename__ = "device_certificates"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    device_id: Mapped[str] = mapped_column(ForeignKey("devices.id"), index=True)
+    certificate_pem: Mapped[str] = mapped_column(String(8192), nullable=False)
+    fingerprint: Mapped[str] = mapped_column(String(64), index=True)
+    issued_at: Mapped[datetime] = mapped_column(DateTime, default=utc_now)
+    expires_at: Mapped[datetime] = mapped_column(DateTime, nullable=False)

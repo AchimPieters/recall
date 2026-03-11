@@ -1,4 +1,4 @@
-# Backend Enterprise Layout (Transitional)
+# Backend Enterprise Layout
 
 This directory is the target backend root for the enterprise rebuild.
 
@@ -24,8 +24,7 @@ This directory is the target backend root for the enterprise rebuild.
 
 ## Transitional mapping from legacy layout
 
-Current implementation remains active in `recall-server/recall` during migration.
-New and migrated modules should be created under `backend/app` first, then legacy references removed incrementally.
+`backend/app` is the canonical and only supported backend runtime location.
 
 ## Namespace note
 

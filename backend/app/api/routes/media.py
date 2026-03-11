@@ -1,4 +1,5 @@
 from fastapi import APIRouter, Depends, File, HTTPException, UploadFile
+from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
 
 from backend.app.core.auth import AuthUser, get_current_user, require_permission
@@ -11,6 +12,10 @@ router = APIRouter(prefix="/media", tags=["media"])
 settings = get_settings()
 
 
+class WorkflowTransitionPayload(BaseModel):
+    state: str = Field(min_length=3, max_length=32)
+
+
 @router.post("/upload", dependencies=[Depends(require_permission("media:write"))])
 async def upload(
     file: UploadFile = File(...),
@@ -21,7 +26,7 @@ async def upload(
     mime = file.content_type or "application/octet-stream"
     service = MediaService(db)
     try:
-        service.validate_upload(file.filename or "upload.bin", len(data), mime)
+        service.validate_upload(file.filename or "upload.bin", len(data), mime, data)
     except ValueError as exc:
         raise HTTPException(400, str(exc)) from exc
 
@@ -53,6 +58,7 @@ async def upload(
         "width": latest.width if latest else None,
         "height": latest.height if latest else None,
         "duration_seconds": latest.duration_seconds if latest else None,
+        "workflow_state": media.workflow_state,
     }
 
 
@@ -80,6 +86,34 @@ def list_media(
                 "width": latest.width if latest else None,
                 "height": latest.height if latest else None,
                 "duration_seconds": latest.duration_seconds if latest else None,
+                "workflow_state": m.workflow_state,
             }
         )
     return result
+
+
+@router.post("/{media_id}/workflow/transition", dependencies=[Depends(require_permission("media:write"))])
+def transition_media_workflow(
+    media_id: int,
+    payload: WorkflowTransitionPayload,
+    db: Session = Depends(get_db),
+    user: AuthUser = Depends(get_current_user),
+):
+    service = MediaService(db)
+    try:
+        media = service.transition_workflow_state(
+            media_id,
+            payload.state,
+            organization_id=user.organization_id,
+        )
+    except ValueError as exc:
+        if str(exc) == "media not found":
+            raise HTTPException(status_code=404, detail="media not found") from exc
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+    latest = service.latest_version(media.id)
+    return {
+        "id": media.id,
+        "workflow_state": media.workflow_state,
+        "version": latest.version if latest else None,
+    }

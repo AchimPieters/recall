@@ -117,6 +117,16 @@ class Settings(BaseModel):
         default_factory=lambda: os.getenv("RECALL_PASSWORD_REQUIRE_SYMBOL", "true").lower()
         == "true"
     )
+    otel_exporter_otlp_endpoint: str = Field(
+        default_factory=lambda: os.getenv("RECALL_OTEL_EXPORTER_OTLP_ENDPOINT", "")
+    )
+    secret_rotation_max_age_days: int = Field(
+        default_factory=lambda: int(os.getenv("RECALL_SECRET_ROTATION_MAX_AGE_DAYS", "30")),
+        ge=1,
+    )
+    jwt_secret_last_rotated_at: str | None = Field(
+        default_factory=lambda: os.getenv("RECALL_JWT_SECRET_LAST_ROTATED_AT", "") or None
+    )
     auth_lockout_minutes: int = Field(
         default_factory=lambda: int(os.getenv("RECALL_AUTH_LOCKOUT_MINUTES", "15")),
         ge=1,

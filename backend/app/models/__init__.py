@@ -7,6 +7,8 @@ from backend.app.models.device import (
     DeviceScreenshot,
     DeviceTag,
     DeviceTagLink,
+    DeviceProvisioningToken,
+    DeviceCertificate,
 )
 from backend.app.models.event import Event
 from backend.app.models.media import Layout, Media, MediaVersion, Playlist, PlaylistAssignment, PlaylistItem, PlaylistRule, Schedule, ScheduleBlackoutWindow, ScheduleException, Zone, ZonePlaylistAssignment
@@ -22,6 +24,8 @@ __all__ = [
     "DeviceScreenshot",
     "DeviceTag",
     "DeviceTagLink",
+    "DeviceProvisioningToken",
+    "DeviceCertificate",
     "Event",
     "Layout",
     "Media",

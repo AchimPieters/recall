@@ -19,19 +19,23 @@ router = APIRouter(prefix="/device", tags=["devices"])
 ALLOWED_DEVICE_STATUSES = {"online", "stale", "offline", "error"}
 
 
-SUPPORTED_DEVICE_PROTOCOL_VERSIONS = {"1"}
+SUPPORTED_DEVICE_PROTOCOL_MAJOR = "1"
 
 
 def _validate_device_protocol_version(
     x_device_protocol_version: str | None = Header(default="1"),
 ) -> str:
     version = (x_device_protocol_version or "1").strip()
-    if version not in SUPPORTED_DEVICE_PROTOCOL_VERSIONS:
+    if not version:
+        version = "1"
+
+    major = version.split(".", 1)[0]
+    if major != SUPPORTED_DEVICE_PROTOCOL_MAJOR:
         raise HTTPException(
             status_code=400,
             detail=(
                 f"Unsupported device protocol version '{version}'. "
-                "Supported versions: 1"
+                "Supported major version: 1.x"
             ),
         )
     return version
@@ -52,19 +56,18 @@ class DeviceCapabilitiesPayload(BaseModel):
         return self.model_dump(exclude_none=True)
 
 
-class DeviceCapabilitiesPayload(BaseModel):
-    os: str | None = None
-    hardware_type: str | None = None
-    display_outputs: int | None = Field(default=None, ge=0)
-    cpu: str | None = None
-    memory_mb: int | None = Field(default=None, ge=0)
-    resolution: str | None = None
-    agent_version: str | None = None
-    connectivity: str | None = None
 
-    def as_dict(self) -> dict:
-        return self.model_dump(exclude_none=True)
 
+class ProvisioningTokenCreatePayload(BaseModel):
+    expires_in_minutes: int = Field(default=30, ge=1, le=1440)
+
+
+class DeviceEnrollPayload(BaseModel):
+    provisioning_token: str = Field(min_length=16, max_length=512)
+    id: str = Field(min_length=1, max_length=64)
+    name: str = Field(default="Unnamed", min_length=1, max_length=255)
+    version: str | None = Field(default=None, max_length=64)
+    capabilities: DeviceCapabilitiesPayload | None = None
 
 class RegisterPayload(BaseModel):
     id: str
@@ -139,6 +142,43 @@ class BulkGroupActionPayload(BaseModel):
     rollout_percentage: int = Field(default=100, ge=1, le=100)
     dry_run: bool = False
 
+
+
+
+@router.post("/provisioning/token", dependencies=[Depends(require_permission("devices:write"))])
+def create_provisioning_token(
+    payload: ProvisioningTokenCreatePayload,
+    db: Session = Depends(get_db),
+    user: AuthUser = Depends(get_current_user),
+):
+    token = DeviceService(db).create_provisioning_token(
+        actor=user.username,
+        organization_id=user.organization_id,
+        expires_in_minutes=payload.expires_in_minutes,
+    )
+    return token
+
+
+@router.post("/provision/enroll")
+def provision_enroll(
+    payload: DeviceEnrollPayload,
+    request: Request,
+    db: Session = Depends(get_db),
+    protocol_version: str = Depends(_validate_device_protocol_version),
+):
+    _ = protocol_version
+    svc = DeviceService(db)
+    try:
+        return svc.enroll_device_with_token(
+            provisioning_token=payload.provisioning_token,
+            device_id=payload.id,
+            name=payload.name,
+            ip=request.client.host if request.client else None,
+            version=payload.version,
+            capabilities=payload.capabilities.as_dict() if payload.capabilities else None,
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
 
 @router.post(
     "/register", dependencies=[Depends(require_role("device", "admin", "operator"))]

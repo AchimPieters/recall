@@ -53,3 +53,33 @@ def test_register_accepts_supported_device_protocol_version() -> None:
     )
     assert response.status_code == 200
     assert response.json()["id"] == "proto-dev-supported"
+
+
+def test_register_accepts_supported_minor_device_protocol_version() -> None:
+    _ensure_user("protocol-admin", "AdminPass1!", role="admin")
+    token = create_access_token(subject="protocol-admin", role="admin")
+    response = client.post(
+        "/api/v1/device/register",
+        json={"id": "proto-dev-supported-minor", "name": "Proto Device", "version": "1.0.0"},
+        headers={
+            "Authorization": f"Bearer {token}",
+            "X-Device-Protocol-Version": "1.2",
+        },
+    )
+    assert response.status_code == 200
+    assert response.json()["id"] == "proto-dev-supported-minor"
+
+
+def test_register_rejects_unsupported_major_device_protocol_version() -> None:
+    _ensure_user("protocol-admin", "AdminPass1!", role="admin")
+    token = create_access_token(subject="protocol-admin", role="admin")
+    response = client.post(
+        "/api/v1/device/register",
+        json={"id": "proto-dev-unsupported-major", "name": "Proto Device", "version": "1.0.0"},
+        headers={
+            "Authorization": f"Bearer {token}",
+            "X-Device-Protocol-Version": "2.0",
+        },
+    )
+    assert response.status_code == 400
+    assert "Supported major version: 1.x" in response.json()["detail"]

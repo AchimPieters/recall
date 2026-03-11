@@ -101,7 +101,7 @@ De agent is modulair opgezet (`agent/agent_modules` en `recall-player/agent_modu
 
 ### 2.3 Webpagina’s
 Er bestaan twee UI-lagen:
-- Legacy static pagina’s in `recall-server/web/`:
+- Static frontend assets live under `frontend/`.
   - `index.html`, `devices.html`, `media.html`, `monitor.html`, `settings.html`
 - React + TypeScript frontend in `frontend/src/pages/`:
   - Dashboard, Devices, Media, Playlists, Schedules, Alerts, Audit Logs, Settings
@@ -138,7 +138,7 @@ Er bestaan twee UI-lagen:
 - Health/readiness/metrics + observability fundament
 
 ### Belangrijkste beperkingen
-- Legacy en nieuwe paden bestaan nog naast elkaar (`recall-server`, `recall-player` vs `backend`, `agent`)
+- Runtime paden zijn geconsolideerd op `backend` en `agent`.
 - Niet alle enterprise-workflows zijn volledig doorgevoerd in UI en operationele processen
 - Dubbele documentatiebestanden voor device protocol bestaan nog (`device_protocol.md` en `device-protocol.md`)
 - Volledige kwaliteitsgates/release-automatisering en hardening zijn nog niet uniform afgedwongen over alle onderdelen

@@ -6,7 +6,7 @@ from flask import Flask, jsonify, request, send_from_directory
 from werkzeug.utils import secure_filename
 
 BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-WEB_DIR = os.path.join(BASE_DIR, "recall-server", "web")
+WEB_DIR = os.path.join(BASE_DIR, "frontend")
 MEDIA_DIR = os.path.join(BASE_DIR, "media")
 MAX_UPLOAD_BYTES = int(os.getenv("RECALL_MAX_UPLOAD_BYTES", str(100 * 1024 * 1024)))
 
