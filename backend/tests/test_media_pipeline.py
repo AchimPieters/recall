@@ -83,3 +83,59 @@ def test_local_storage_backend_allows_nested_relative_paths(tmp_path: Path) -> N
     target = storage.write_bytes("nested/file.bin", b"abc")
     assert target.exists()
     assert target.read_bytes() == b"abc"
+
+
+def test_validate_upload_rejects_mime_extension_mismatch(tmp_path: Path, monkeypatch) -> None:
+    db = _db_session()
+    monkeypatch.setattr(media_service_module.settings, "media_dir", str(tmp_path))
+    svc = MediaService(db)
+
+    with pytest.raises(ValueError, match="File extension does not match MIME type"):
+        svc.validate_upload("file.mp4", 20, "image/png", b"x" * 20)
+
+
+def test_validate_upload_rejects_invalid_video_container(tmp_path: Path, monkeypatch) -> None:
+    db = _db_session()
+    monkeypatch.setattr(media_service_module.settings, "media_dir", str(tmp_path))
+    svc = MediaService(db)
+
+    with pytest.raises(ValueError, match="Invalid MP4 container"):
+        svc.validate_upload("clip.mp4", 64, "video/mp4", b"not-an-mp4-container")
+
+
+def test_media_workflow_default_and_valid_transitions(tmp_path: Path, monkeypatch) -> None:
+    db = _db_session()
+    monkeypatch.setattr(media_service_module.settings, "media_dir", str(tmp_path))
+    svc = MediaService(db)
+
+    media = svc.store_upload("poster.png", "image/png", _png_bytes("green"), organization_id=1)
+    assert media.workflow_state == "draft"
+
+    review = svc.transition_workflow_state(media.id, "review", organization_id=1)
+    assert review.workflow_state == "review"
+
+    approved = svc.transition_workflow_state(media.id, "approved", organization_id=1)
+    assert approved.workflow_state == "approved"
+
+
+def test_media_workflow_rejects_invalid_or_forbidden_transitions(tmp_path: Path, monkeypatch) -> None:
+    db = _db_session()
+    monkeypatch.setattr(media_service_module.settings, "media_dir", str(tmp_path))
+    svc = MediaService(db)
+    media = svc.store_upload("poster.png", "image/png", _png_bytes("green"), organization_id=1)
+
+    with pytest.raises(ValueError, match="unsupported workflow state"):
+        svc.transition_workflow_state(media.id, "not-a-real-state", organization_id=1)
+
+    with pytest.raises(ValueError, match="invalid workflow transition"):
+        svc.transition_workflow_state(media.id, "published", organization_id=1)
+
+
+def test_media_workflow_transition_enforces_organization_scope(tmp_path: Path, monkeypatch) -> None:
+    db = _db_session()
+    monkeypatch.setattr(media_service_module.settings, "media_dir", str(tmp_path))
+    svc = MediaService(db)
+    media = svc.store_upload("poster.png", "image/png", _png_bytes("green"), organization_id=1)
+
+    with pytest.raises(ValueError, match="media not found"):
+        svc.transition_workflow_state(media.id, "review", organization_id=999)

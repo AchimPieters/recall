@@ -55,6 +55,9 @@ class User(Base):
     locked_until: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
     is_active: Mapped[bool] = mapped_column(Boolean, default=True)
     password_changed_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+    mfa_enabled: Mapped[bool] = mapped_column(Boolean, default=False)
+    mfa_secret: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    mfa_recovery_codes: Mapped[str | None] = mapped_column(String(4096), nullable=True)
 
 
 class Organization(Base):

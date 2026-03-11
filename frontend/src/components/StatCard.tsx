@@ -8,7 +8,13 @@ type StatCardProps = {
   children?: ReactNode
 }
 
-export function StatCard({ label, value, hint, accent = '#2563eb', children }: StatCardProps) {
+export function StatCard({
+  label,
+  value,
+  hint,
+  accent = '#2563eb',
+  children,
+}: StatCardProps) {
   return (
     <section
       style={{
@@ -21,8 +27,21 @@ export function StatCard({ label, value, hint, accent = '#2563eb', children }: S
       }}
     >
       <p style={{ margin: 0, fontSize: 12, color: '#6b7280' }}>{label}</p>
-      <p style={{ margin: '6px 0 0', fontSize: 28, fontWeight: 700, color: accent }}>{value}</p>
-      {hint ? <p style={{ margin: '6px 0 0', fontSize: 12, color: '#4b5563' }}>{hint}</p> : null}
+      <p
+        style={{
+          margin: '6px 0 0',
+          fontSize: 28,
+          fontWeight: 700,
+          color: accent,
+        }}
+      >
+        {value}
+      </p>
+      {hint ? (
+        <p style={{ margin: '6px 0 0', fontSize: 12, color: '#4b5563' }}>
+          {hint}
+        </p>
+      ) : null}
       {children}
     </section>
   )

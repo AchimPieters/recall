@@ -11,33 +11,33 @@ Recall is a production-oriented digital signage platform with an enterprise migr
 
 See the detailed architecture blueprint in [`docs/architecture.md`](docs/architecture.md).
 
-## Repository overview (current + target)
-- `backend/`: enterprise backend runtime (target path).
-- `recall-server/`: legacy backend/runtime (compat path during migration).
-- `recall-player/`: current agent runtime.
+## Repository overview
+- `backend/`: canonical backend runtime.
+- `agent/`: device agent runtime.
+- `frontend/`: web frontend.
+- `docker/`: local container build and compose stack.
 - `docs/`: architecture, API, security, deployment and runbooks.
-- `docs/recall-v2-enterprise-structure.md`: target v2 directory architecture.
-- `docs/engineer-implementation-checklist.md`: phase-based engineer checklist.
 
 ## Development quick start
 ```bash
-python -m pip install -r recall-server/requirements.txt
+python -m pip install -r backend/requirements.txt
 uvicorn backend.app.api.main:app --host 0.0.0.0 --port 8000
 ```
 
-## Configuration
-- Copy `.env.example` to `.env` and set production-grade secrets (`JWT_SECRET`, DB credentials).
-- For local parity, use PostgreSQL and Redis defaults from `docker/docker-compose.yml`.
-
 ## Testing and quality
-From `recall-server/`:
 ```bash
-ruff check recall tests
-black --check recall tests
-mypy --ignore-missing-imports recall
-bandit -q -r recall -lll
-pytest -q
+pytest -q backend
+pytest -q agent/tests
 ```
+
+## Docker compose stack
+`docker/docker-compose.yml` contains:
+- `recall-api`
+- `recall-worker`
+- `recall-agent`
+- `recall-frontend`
+- `postgres`
+- `redis`
 
 ## Deployment
 - Local/container install helpers: `install-docker.sh`, `install-pi.sh`, `install-x86.sh`.
@@ -46,6 +46,3 @@ pytest -q
 ## Security
 - Responsible disclosure policy: [`SECURITY.md`](SECURITY.md).
 - Security architecture and controls: [`docs/security.md`](docs/security.md).
-
-## Product screenshot
-![Recall monitor UI](recall-server/web/Recall_Monitor.png)

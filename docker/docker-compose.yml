@@ -9,6 +9,7 @@ services:
       - "8000:8000"
     environment:
       DATABASE_URL: postgresql+psycopg2://recall:recall@postgres:5432/recall
+      REDIS_URL: redis://redis:6379/0
       JWT_SECRET: ${JWT_SECRET:?set-a-strong-jwt-secret}
       MEDIA_DIR: /media
       RECALL_CORS_ORIGINS: ${RECALL_CORS_ORIGINS:-http://localhost,http://127.0.0.1}
@@ -17,6 +18,32 @@ services:
     depends_on:
       - postgres
       - redis
+
+  recall-worker:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile
+    environment:
+      DATABASE_URL: postgresql+psycopg2://recall:recall@postgres:5432/recall
+      REDIS_URL: redis://redis:6379/0
+      JWT_SECRET: ${JWT_SECRET:?set-a-strong-jwt-secret}
+    depends_on:
+      - postgres
+      - redis
+    command: ["celery", "-A", "backend.app.workers.celery_app:celery_app", "worker", "--loglevel=info"]
+
+  recall-agent:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile
+    environment:
+      RECALL_SERVER_URL: http://recall-api:8000
+      RECALL_VERIFY_TLS: "false"
+      RECALL_ACCESS_TOKEN: ${RECALL_ACCESS_TOKEN:-}
+      RECALL_API_KEY: ${RECALL_API_KEY:-}
+    depends_on:
+      - recall-api
+    command: ["python", "-m", "agent.agent"]
 
   postgres:
     image: postgres:16
@@ -31,20 +58,6 @@ services:
     image: redis:7
     ports:
       - "6379:6379"
-
-  recall-worker:
-    build:
-      context: ..
-      dockerfile: docker/Dockerfile
-    environment:
-      DATABASE_URL: postgresql+psycopg2://recall:recall@postgres:5432/recall
-      REDIS_URL: redis://redis:6379/0
-      JWT_SECRET: ${JWT_SECRET:?set-a-strong-jwt-secret}
-    depends_on:
-      - postgres
-      - redis
-    command: ["celery", "-A", "recall.workers.celery_app:celery_app", "worker", "--loglevel=info"]
-
 
   recall-frontend:
     build:

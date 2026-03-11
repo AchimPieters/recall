@@ -1,0 +1,60 @@
+name: Supply Chain Security
+
+on:
+  pull_request:
+    paths:
+      - 'backend/**'
+      - 'agent/**'
+      - 'frontend/**'
+      - '.github/workflows/supply-chain-security.yml'
+  push:
+    branches: ['main', 'master']
+  workflow_dispatch:
+
+jobs:
+  sbom-scan-sign:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Syft
+        run: |
+          curl -sSfL https://raw.githubusercontent.com/anchore/syft/main/install.sh | sh -s -- -b /usr/local/bin
+          syft version
+
+      - name: Generate SBOM (CycloneDX JSON)
+        run: |
+          syft dir:. -o cyclonedx-json=sbom.cdx.json
+
+      - name: Install Grype
+        run: |
+          curl -sSfL https://raw.githubusercontent.com/anchore/grype/main/install.sh | sh -s -- -b /usr/local/bin
+          grype version
+
+      - name: Scan SBOM with Grype
+        run: |
+          grype sbom:sbom.cdx.json --fail-on high
+
+      - name: Install Cosign
+        run: |
+          curl -sSfL https://github.com/sigstore/cosign/releases/latest/download/cosign-linux-amd64 -o /usr/local/bin/cosign
+          chmod +x /usr/local/bin/cosign
+          cosign version
+
+      - name: Sign SBOM blob (keyless)
+        env:
+          COSIGN_YES: 'true'
+        run: |
+          cosign sign-blob sbom.cdx.json --output-signature sbom.cdx.json.sig --output-certificate sbom.cdx.json.pem
+
+      - name: Upload supply chain artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: supply-chain-artifacts
+          path: |
+            sbom.cdx.json
+            sbom.cdx.json.sig
+            sbom.cdx.json.pem

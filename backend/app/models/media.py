@@ -21,6 +21,7 @@ class Media(Base):
     thumbnail_path: Mapped[str | None] = mapped_column(String(1024), nullable=True)
     duration_seconds: Mapped[int | None] = mapped_column(Integer, nullable=True)
     uploaded_at: Mapped[datetime] = mapped_column(DateTime, default=utc_now)
+    workflow_state: Mapped[str] = mapped_column(String(32), default="draft", nullable=False, index=True)
 
 
 class Playlist(Base):
