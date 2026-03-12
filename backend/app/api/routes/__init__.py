@@ -1,4 +1,4 @@
-from . import auth, devices, events, media, monitor, platform, playlists, security, settings, system
+from . import auth, devices, events, media, monitor, platform, playlists, public_api_keys, security, settings, system
 
 __all__ = [
     "auth",
@@ -8,6 +8,7 @@ __all__ = [
     "monitor",
     "platform",
     "playlists",
+    "public_api_keys",
     "security",
     "settings",
     "system",

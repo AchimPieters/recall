@@ -57,10 +57,6 @@ class Settings(BaseModel):
             if origin.strip()
         ]
     )
-    auto_create_schema: bool = Field(
-        default_factory=lambda: os.getenv("RECALL_AUTO_CREATE_SCHEMA", "true").lower()
-        == "true"
-    )
     bootstrap_admin_username: str = Field(
         default_factory=lambda: os.getenv("RECALL_BOOTSTRAP_ADMIN_USERNAME", "admin")
     )
@@ -126,6 +122,13 @@ class Settings(BaseModel):
     )
     jwt_secret_last_rotated_at: str | None = Field(
         default_factory=lambda: os.getenv("RECALL_JWT_SECRET_LAST_ROTATED_AT", "") or None
+    )
+    public_api_keys: str = Field(
+        default_factory=lambda: os.getenv("RECALL_PUBLIC_API_KEYS", "")
+    )
+    device_api_require_certificate: bool = Field(
+        default_factory=lambda: os.getenv("RECALL_DEVICE_API_REQUIRE_CERTIFICATE", "false").lower()
+        == "true"
     )
     auth_lockout_minutes: int = Field(
         default_factory=lambda: int(os.getenv("RECALL_AUTH_LOCKOUT_MINUTES", "15")),

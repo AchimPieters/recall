@@ -14,6 +14,7 @@ from slowapi.errors import RateLimitExceeded
 from slowapi.extension import _rate_limit_exceeded_handler
 
 from backend.app.api.routes import (
+    analytics,
     auth,
     devices,
     events,
@@ -21,14 +22,15 @@ from backend.app.api.routes import (
     monitor,
     platform,
     playlists,
+    public,
+    public_api_keys,
     security,
     settings,
     system,
 )
 from backend.app.core.config import get_settings
 from backend.app.core.tracing import init_tracing
-from backend.app.db.database import engine, get_db
-from backend.app.db.migrate import apply_sql_migrations
+from backend.app.db.database import get_db
 
 settings_conf = get_settings()
 
@@ -49,8 +51,6 @@ def _bootstrap_admin() -> None:
 
 @asynccontextmanager
 async def lifespan(_: FastAPI):
-    if settings_conf.auto_create_schema:
-        apply_sql_migrations(engine)
     tracing_enabled = init_tracing("recall-api")
     logger.info("tracing", enabled=tracing_enabled)
     _bootstrap_admin()
@@ -75,6 +75,7 @@ if WEB_DIR.exists():
 
 api_prefix = "/api/v1"
 app.include_router(platform.router, prefix=api_prefix)
+app.include_router(analytics.router, prefix=api_prefix)
 app.include_router(auth.router, prefix=api_prefix)
 app.include_router(devices.router, prefix=api_prefix)
 app.include_router(media.router, prefix=api_prefix)
@@ -84,6 +85,8 @@ app.include_router(settings.router, prefix=api_prefix)
 app.include_router(playlists.router, prefix=api_prefix)
 app.include_router(security.router, prefix=api_prefix)
 app.include_router(system.router, prefix=api_prefix)
+app.include_router(public.router, prefix="/api/public/v1")
+app.include_router(public_api_keys.router, prefix=api_prefix)
 
 request_latency = Histogram(
     "http_request_duration_seconds", "Request latency", ["method", "path"]

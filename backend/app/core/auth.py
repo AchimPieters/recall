@@ -59,6 +59,15 @@ ROLE_PERMISSIONS: dict[str, set[str]] = {
         "monitor.read",
         "monitor.write",
     },
+    "editor": {
+        "media.read",
+        "media.upload",
+    },
+    "reviewer": {
+        "media.read",
+        "media.upload",
+        "playlists.read",
+    },
     "viewer": {
         "devices.read",
         "media.read",

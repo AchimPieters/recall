@@ -3,6 +3,7 @@ from io import StringIO
 from fastapi import APIRouter, Depends, Header, HTTPException, Request
 from fastapi.responses import PlainTextResponse
 from pydantic import BaseModel, Field
+from sqlalchemy import select
 from sqlalchemy.orm import Session
 from backend.app.core.auth import (
     AuthUser,
@@ -11,7 +12,9 @@ from backend.app.core.auth import (
     require_permission,
     require_role,
 )
+from backend.app.core.config import get_settings
 from backend.app.db.database import get_db
+from backend.app.models import DeviceCertificate
 from backend.app.services.device_service import DeviceService
 
 router = APIRouter(prefix="/device", tags=["devices"])
@@ -20,6 +23,27 @@ ALLOWED_DEVICE_STATUSES = {"online", "stale", "offline", "error"}
 
 
 SUPPORTED_DEVICE_PROTOCOL_MAJOR = "1"
+settings_conf = get_settings()
+
+
+
+
+def _validate_device_certificate(*, db: Session, device_id: str, certificate_fingerprint: str | None) -> None:
+    if not settings_conf.device_api_require_certificate:
+        return
+
+    fingerprint = (certificate_fingerprint or "").strip()
+    if not fingerprint:
+        raise HTTPException(status_code=401, detail="Device certificate fingerprint required")
+
+    cert = db.scalar(
+        select(DeviceCertificate).where(
+            DeviceCertificate.device_id == device_id,
+            DeviceCertificate.fingerprint == fingerprint,
+        )
+    )
+    if cert is None:
+        raise HTTPException(status_code=401, detail="Invalid device certificate fingerprint")
 
 
 def _validate_device_protocol_version(
@@ -212,8 +236,10 @@ def heartbeat(
     db: Session = Depends(get_db),
     user: AuthUser = Depends(get_current_user),
     protocol_version: str = Depends(_validate_device_protocol_version),
+    certificate_fingerprint: str | None = Header(default=None, alias="X-Device-Certificate-Fingerprint"),
 ):
     _ = protocol_version
+    _validate_device_certificate(db=db, device_id=payload.id, certificate_fingerprint=certificate_fingerprint)
     svc = DeviceService(db)
     device = svc.heartbeat(payload.id, payload.metrics)
     if not device:
@@ -229,7 +255,9 @@ def get_config(
     device_id: str,
     db: Session = Depends(get_db),
     user: AuthUser = Depends(get_current_user),
+    certificate_fingerprint: str | None = Header(default=None, alias="X-Device-Certificate-Fingerprint"),
 ):
+    _validate_device_certificate(db=db, device_id=device_id, certificate_fingerprint=certificate_fingerprint)
     svc = DeviceService(db)
     if user.organization_id is not None:
         device = svc.get_device(device_id)
@@ -245,7 +273,9 @@ def post_logs(
     payload: LogPayload,
     db: Session = Depends(get_db),
     user: AuthUser = Depends(get_current_user),
+    certificate_fingerprint: str | None = Header(default=None, alias="X-Device-Certificate-Fingerprint"),
 ):
+    _validate_device_certificate(db=db, device_id=payload.id, certificate_fingerprint=certificate_fingerprint)
     log = DeviceService(db).add_log(
         payload.id, payload.level, payload.action, payload.message
     )
@@ -314,7 +344,9 @@ def post_metrics(
     payload: HeartbeatPayload,
     db: Session = Depends(get_db),
     user: AuthUser = Depends(get_current_user),
+    certificate_fingerprint: str | None = Header(default=None, alias="X-Device-Certificate-Fingerprint"),
 ):
+    _validate_device_certificate(db=db, device_id=payload.id, certificate_fingerprint=certificate_fingerprint)
     device = DeviceService(db).heartbeat(payload.id, payload.metrics)
     if not device:
         raise HTTPException(404, "device not found")
@@ -355,8 +387,10 @@ def fetch_commands(
     db: Session = Depends(get_db),
     user: AuthUser = Depends(get_current_user),
     protocol_version: str = Depends(_validate_device_protocol_version),
+    certificate_fingerprint: str | None = Header(default=None, alias="X-Device-Certificate-Fingerprint"),
 ):
     _ = protocol_version
+    _validate_device_certificate(db=db, device_id=device_id, certificate_fingerprint=certificate_fingerprint)
     svc = DeviceService(db)
     device = svc.get_device(device_id)
     if not device:
@@ -373,8 +407,10 @@ def command_ack(
     db: Session = Depends(get_db),
     user: AuthUser = Depends(get_current_user),
     protocol_version: str = Depends(_validate_device_protocol_version),
+    certificate_fingerprint: str | None = Header(default=None, alias="X-Device-Certificate-Fingerprint"),
 ):
     _ = protocol_version
+    _validate_device_certificate(db=db, device_id=payload.id, certificate_fingerprint=certificate_fingerprint)
     svc = DeviceService(db)
     device = svc.get_device(payload.id)
     if not device:
@@ -394,8 +430,10 @@ def playback_status(
     db: Session = Depends(get_db),
     user: AuthUser = Depends(get_current_user),
     protocol_version: str = Depends(_validate_device_protocol_version),
+    certificate_fingerprint: str | None = Header(default=None, alias="X-Device-Certificate-Fingerprint"),
 ):
     _ = protocol_version
+    _validate_device_certificate(db=db, device_id=payload.id, certificate_fingerprint=certificate_fingerprint)
     svc = DeviceService(db)
     device = svc.get_device(payload.id)
     if not device:

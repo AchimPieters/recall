@@ -5,7 +5,7 @@ Dit document definieert het formele, versioned device protocol tussen player-age
 ## Versioning
 - Huidige protocolversie: `v1`.
 - Canonieke prefix: `/api/v1/device/*`.
-- Legacy compat-prefix zonder `/api/v1` blijft tijdelijk ondersteund tijdens migratie.
+- Legacy compat-prefix zonder `/api/v1` wordt niet meer ondersteund.
 
 ## Device capability contract
 Bij `register` rapporteert de agent minimaal:
@@ -109,3 +109,10 @@ Payload:
 - `stale`: heartbeat ouder dan de helft van `HEARTBEAT_TIMEOUT` maar nog niet verlopen.
 - `offline`: heartbeat ouder dan `HEARTBEAT_TIMEOUT`.
 - `error`: device rapporteert expliciet `metrics.state=error` (bijv. playback failure).
+
+
+## Device identity hardening (optional certificate requirement)
+- Wanneer `RECALL_DEVICE_API_REQUIRE_CERTIFICATE=true` is geconfigureerd, vereisen device-routes een certificaatfingerprint via header `X-Device-Certificate-Fingerprint`.
+- Geldige fingerprint moet matchen met een uitgegeven certificaat voor het betreffende device (uit provisioning enrollment).
+- Bij ontbrekende fingerprint retourneert de API `401 Device certificate fingerprint required`.
+- Bij ongeldige fingerprint retourneert de API `401 Invalid device certificate fingerprint`.

@@ -58,3 +58,19 @@ def test_repositories_do_not_import_fastapi_or_http() -> None:
             if banned in content:
                 violations.append(f"{path}: contains '{banned}'")
     assert not violations, "\n".join(violations)
+
+
+def test_api_main_does_not_apply_schema_migrations_at_runtime() -> None:
+    root = Path(__file__).resolve().parents[1]
+    api_main = (root / "app" / "api" / "main.py").read_text(encoding="utf-8")
+    assert "apply_sql_migrations(" not in api_main
+
+
+def test_application_code_does_not_use_create_all_runtime_schema_calls() -> None:
+    app_root = Path(__file__).resolve().parents[1] / "app"
+    violations: list[str] = []
+    for path in sorted(app_root.rglob("*.py")):
+        content = path.read_text(encoding="utf-8")
+        if "Base.metadata.create_all(" in content:
+            violations.append(str(path.relative_to(Path(__file__).resolve().parents[2])))
+    assert not violations, "Runtime schema mutation found in: " + ", ".join(violations)

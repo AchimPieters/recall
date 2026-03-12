@@ -5,9 +5,12 @@ import { MediaPage } from './pages/MediaPage'
 import { PlaylistsPage } from './pages/PlaylistsPage'
 import { SchedulesPage } from './pages/SchedulesPage'
 import { AlertsPage } from './pages/AlertsPage'
+import { AnalyticsPage } from './pages/AnalyticsPage'
 import { SettingsPage } from './pages/SettingsPage'
 import { AuditLogsPage } from './pages/AuditLogsPage'
 import { ObservabilityPage } from './pages/ObservabilityPage'
+import { OtaUpdatesPage } from './pages/OtaUpdatesPage'
+import { FleetDashboardPage } from './pages/FleetDashboardPage'
 
 const links = [
   ['/', 'Dashboard'],
@@ -19,6 +22,9 @@ const links = [
   ['/settings', 'Settings'],
   ['/audit-logs', 'Audit logs'],
   ['/observability', 'Observability'],
+  ['/analytics', 'Analytics'],
+  ['/ota-updates', 'OTA manager'],
+  ['/fleet', 'Fleet dashboard'],
 ]
 
 export function App() {
@@ -43,6 +49,9 @@ export function App() {
         <Route path="/settings" element={<SettingsPage />} />
         <Route path="/audit-logs" element={<AuditLogsPage />} />
         <Route path="/observability" element={<ObservabilityPage />} />
+        <Route path="/analytics" element={<AnalyticsPage />} />
+        <Route path="/ota-updates" element={<OtaUpdatesPage />} />
+        <Route path="/fleet" element={<FleetDashboardPage />} />
       </Routes>
     </div>
   )

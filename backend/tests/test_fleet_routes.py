@@ -9,7 +9,7 @@ from backend.app.services.device_service import DeviceService
 client = TestClient(app)
 
 
-def _ensure_user(username: str, password: str, role: str = "admin") -> None:
+def _ensure_user(username: str, password: str, role: str = "admin", organization_id: int | None = None) -> None:
     Base.metadata.create_all(bind=engine)
     db = SessionLocal()
     try:
@@ -19,6 +19,7 @@ def _ensure_user(username: str, password: str, role: str = "admin") -> None:
             db.add(user)
         user.password_hash = get_password_hash(password)
         user.role = role
+        user.organization_id = organization_id
         user.is_active = True
         db.commit()
     finally:
@@ -128,3 +129,35 @@ def test_export_devices_csv_returns_csv_payload() -> None:
     lines = response.text.splitlines()
     assert lines[0] == "id,name,status,version,last_seen,organization_id"
     assert any(line.startswith("csv-dev-1,CSV Device,") for line in lines[1:])
+
+
+def test_device_list_and_csv_are_tenant_scoped() -> None:
+    _ensure_user("fleet-org-admin", "AdminPass1!", role="admin", organization_id=101)
+
+    db = SessionLocal()
+    try:
+        svc = DeviceService(db)
+        svc.register("org101-dev", "Org101 Device", None, "1.0.0", organization_id=101)
+        svc.register("org202-dev", "Org202 Device", None, "1.0.0", organization_id=202)
+    finally:
+        db.close()
+
+    list_response = client.get(
+        "/api/v1/device/list",
+        headers=_auth_headers("fleet-org-admin"),
+    )
+
+    assert list_response.status_code == 200
+    listed_ids = {row["id"] for row in list_response.json()}
+    assert "org101-dev" in listed_ids
+    assert "org202-dev" not in listed_ids
+
+    csv_response = client.get(
+        "/api/v1/device/export.csv",
+        headers=_auth_headers("fleet-org-admin"),
+    )
+
+    assert csv_response.status_code == 200
+    lines = csv_response.text.splitlines()
+    assert any(line.startswith("org101-dev,Org101 Device,") for line in lines[1:])
+    assert not any(line.startswith("org202-dev,Org202 Device,") for line in lines[1:])
