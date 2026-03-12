@@ -26,15 +26,17 @@ SUPPORTED_DEVICE_PROTOCOL_MAJOR = "1"
 settings_conf = get_settings()
 
 
-
-
-def _validate_device_certificate(*, db: Session, device_id: str, certificate_fingerprint: str | None) -> None:
+def _validate_device_certificate(
+    *, db: Session, device_id: str, certificate_fingerprint: str | None
+) -> None:
     if not settings_conf.device_api_require_certificate:
         return
 
     fingerprint = (certificate_fingerprint or "").strip()
     if not fingerprint:
-        raise HTTPException(status_code=401, detail="Device certificate fingerprint required")
+        raise HTTPException(
+            status_code=401, detail="Device certificate fingerprint required"
+        )
 
     cert = db.scalar(
         select(DeviceCertificate).where(
@@ -43,7 +45,9 @@ def _validate_device_certificate(*, db: Session, device_id: str, certificate_fin
         )
     )
     if cert is None:
-        raise HTTPException(status_code=401, detail="Invalid device certificate fingerprint")
+        raise HTTPException(
+            status_code=401, detail="Invalid device certificate fingerprint"
+        )
 
 
 def _validate_device_protocol_version(
@@ -65,7 +69,6 @@ def _validate_device_protocol_version(
     return version
 
 
-
 class DeviceCapabilitiesPayload(BaseModel):
     os: str | None = None
     hardware_type: str | None = None
@@ -80,8 +83,6 @@ class DeviceCapabilitiesPayload(BaseModel):
         return self.model_dump(exclude_none=True)
 
 
-
-
 class ProvisioningTokenCreatePayload(BaseModel):
     expires_in_minutes: int = Field(default=30, ge=1, le=1440)
 
@@ -92,6 +93,7 @@ class DeviceEnrollPayload(BaseModel):
     name: str = Field(default="Unnamed", min_length=1, max_length=255)
     version: str | None = Field(default=None, max_length=64)
     capabilities: DeviceCapabilitiesPayload | None = None
+
 
 class RegisterPayload(BaseModel):
     id: str
@@ -125,8 +127,6 @@ class ScreenshotPayload(BaseModel):
     image_path: str = Field(min_length=1, max_length=1024)
 
 
-
-
 class CommandEnqueuePayload(BaseModel):
     device_id: str = Field(min_length=1, max_length=64)
     command_type: str = Field(min_length=1, max_length=128)
@@ -148,8 +148,6 @@ class PlaybackStatusPayload(BaseModel):
     detail: str | None = Field(default=None, max_length=1024)
 
 
-
-
 class TagPayload(BaseModel):
     name: str = Field(min_length=1, max_length=128)
 
@@ -167,9 +165,9 @@ class BulkGroupActionPayload(BaseModel):
     dry_run: bool = False
 
 
-
-
-@router.post("/provisioning/token", dependencies=[Depends(require_permission("devices:write"))])
+@router.post(
+    "/provisioning/token", dependencies=[Depends(require_permission("devices:write"))]
+)
 def create_provisioning_token(
     payload: ProvisioningTokenCreatePayload,
     db: Session = Depends(get_db),
@@ -199,10 +197,13 @@ def provision_enroll(
             name=payload.name,
             ip=request.client.host if request.client else None,
             version=payload.version,
-            capabilities=payload.capabilities.as_dict() if payload.capabilities else None,
+            capabilities=(
+                payload.capabilities.as_dict() if payload.capabilities else None
+            ),
         )
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
+
 
 @router.post(
     "/register", dependencies=[Depends(require_role("device", "admin", "operator"))]
@@ -236,10 +237,14 @@ def heartbeat(
     db: Session = Depends(get_db),
     user: AuthUser = Depends(get_current_user),
     protocol_version: str = Depends(_validate_device_protocol_version),
-    certificate_fingerprint: str | None = Header(default=None, alias="X-Device-Certificate-Fingerprint"),
+    certificate_fingerprint: str | None = Header(
+        default=None, alias="X-Device-Certificate-Fingerprint"
+    ),
 ):
     _ = protocol_version
-    _validate_device_certificate(db=db, device_id=payload.id, certificate_fingerprint=certificate_fingerprint)
+    _validate_device_certificate(
+        db=db, device_id=payload.id, certificate_fingerprint=certificate_fingerprint
+    )
     svc = DeviceService(db)
     device = svc.heartbeat(payload.id, payload.metrics)
     if not device:
@@ -255,9 +260,13 @@ def get_config(
     device_id: str,
     db: Session = Depends(get_db),
     user: AuthUser = Depends(get_current_user),
-    certificate_fingerprint: str | None = Header(default=None, alias="X-Device-Certificate-Fingerprint"),
+    certificate_fingerprint: str | None = Header(
+        default=None, alias="X-Device-Certificate-Fingerprint"
+    ),
 ):
-    _validate_device_certificate(db=db, device_id=device_id, certificate_fingerprint=certificate_fingerprint)
+    _validate_device_certificate(
+        db=db, device_id=device_id, certificate_fingerprint=certificate_fingerprint
+    )
     svc = DeviceService(db)
     if user.organization_id is not None:
         device = svc.get_device(device_id)
@@ -273,9 +282,13 @@ def post_logs(
     payload: LogPayload,
     db: Session = Depends(get_db),
     user: AuthUser = Depends(get_current_user),
-    certificate_fingerprint: str | None = Header(default=None, alias="X-Device-Certificate-Fingerprint"),
+    certificate_fingerprint: str | None = Header(
+        default=None, alias="X-Device-Certificate-Fingerprint"
+    ),
 ):
-    _validate_device_certificate(db=db, device_id=payload.id, certificate_fingerprint=certificate_fingerprint)
+    _validate_device_certificate(
+        db=db, device_id=payload.id, certificate_fingerprint=certificate_fingerprint
+    )
     log = DeviceService(db).add_log(
         payload.id, payload.level, payload.action, payload.message
     )
@@ -344,18 +357,18 @@ def post_metrics(
     payload: HeartbeatPayload,
     db: Session = Depends(get_db),
     user: AuthUser = Depends(get_current_user),
-    certificate_fingerprint: str | None = Header(default=None, alias="X-Device-Certificate-Fingerprint"),
+    certificate_fingerprint: str | None = Header(
+        default=None, alias="X-Device-Certificate-Fingerprint"
+    ),
 ):
-    _validate_device_certificate(db=db, device_id=payload.id, certificate_fingerprint=certificate_fingerprint)
+    _validate_device_certificate(
+        db=db, device_id=payload.id, certificate_fingerprint=certificate_fingerprint
+    )
     device = DeviceService(db).heartbeat(payload.id, payload.metrics)
     if not device:
         raise HTTPException(404, "device not found")
     ensure_organization_access(user, device.organization_id)
     return {"status": "recorded"}
-
-
-
-
 
 
 @router.post(
@@ -387,10 +400,14 @@ def fetch_commands(
     db: Session = Depends(get_db),
     user: AuthUser = Depends(get_current_user),
     protocol_version: str = Depends(_validate_device_protocol_version),
-    certificate_fingerprint: str | None = Header(default=None, alias="X-Device-Certificate-Fingerprint"),
+    certificate_fingerprint: str | None = Header(
+        default=None, alias="X-Device-Certificate-Fingerprint"
+    ),
 ):
     _ = protocol_version
-    _validate_device_certificate(db=db, device_id=device_id, certificate_fingerprint=certificate_fingerprint)
+    _validate_device_certificate(
+        db=db, device_id=device_id, certificate_fingerprint=certificate_fingerprint
+    )
     svc = DeviceService(db)
     device = svc.get_device(device_id)
     if not device:
@@ -407,33 +424,44 @@ def command_ack(
     db: Session = Depends(get_db),
     user: AuthUser = Depends(get_current_user),
     protocol_version: str = Depends(_validate_device_protocol_version),
-    certificate_fingerprint: str | None = Header(default=None, alias="X-Device-Certificate-Fingerprint"),
+    certificate_fingerprint: str | None = Header(
+        default=None, alias="X-Device-Certificate-Fingerprint"
+    ),
 ):
     _ = protocol_version
-    _validate_device_certificate(db=db, device_id=payload.id, certificate_fingerprint=certificate_fingerprint)
+    _validate_device_certificate(
+        db=db, device_id=payload.id, certificate_fingerprint=certificate_fingerprint
+    )
     svc = DeviceService(db)
     device = svc.get_device(payload.id)
     if not device:
         raise HTTPException(404, "device not found")
     ensure_organization_access(user, device.organization_id)
-    updated = svc.ack_command(payload.id, payload.command_id, payload.status, payload.detail)
+    updated = svc.ack_command(
+        payload.id, payload.command_id, payload.status, payload.detail
+    )
     if not updated:
         raise HTTPException(404, "command not found")
     return updated
 
 
 @router.post(
-    "/playback-status", dependencies=[Depends(require_role("device", "admin", "operator"))]
+    "/playback-status",
+    dependencies=[Depends(require_role("device", "admin", "operator"))],
 )
 def playback_status(
     payload: PlaybackStatusPayload,
     db: Session = Depends(get_db),
     user: AuthUser = Depends(get_current_user),
     protocol_version: str = Depends(_validate_device_protocol_version),
-    certificate_fingerprint: str | None = Header(default=None, alias="X-Device-Certificate-Fingerprint"),
+    certificate_fingerprint: str | None = Header(
+        default=None, alias="X-Device-Certificate-Fingerprint"
+    ),
 ):
     _ = protocol_version
-    _validate_device_certificate(db=db, device_id=payload.id, certificate_fingerprint=certificate_fingerprint)
+    _validate_device_certificate(
+        db=db, device_id=payload.id, certificate_fingerprint=certificate_fingerprint
+    )
     svc = DeviceService(db)
     device = svc.get_device(payload.id)
     if not device:
@@ -478,7 +506,9 @@ def list_devices(
         try:
             parsed_last_seen = datetime.fromisoformat(raw)
         except ValueError as exc:
-            raise HTTPException(status_code=400, detail="invalid last_seen_before timestamp") from exc
+            raise HTTPException(
+                status_code=400, detail="invalid last_seen_before timestamp"
+            ) from exc
 
     return svc.list_devices(
         organization_id=user.organization_id,
@@ -488,8 +518,6 @@ def list_devices(
         version=version,
         last_seen_before=parsed_last_seen,
     )
-
-
 
 
 @router.get("/export.csv", dependencies=[Depends(require_permission("devices:read"))])
@@ -521,7 +549,9 @@ def export_devices_csv(
         try:
             parsed_last_seen = datetime.fromisoformat(raw)
         except ValueError as exc:
-            raise HTTPException(status_code=400, detail="invalid last_seen_before timestamp") from exc
+            raise HTTPException(
+                status_code=400, detail="invalid last_seen_before timestamp"
+            ) from exc
 
     devices = svc.list_devices(
         organization_id=user.organization_id,
@@ -553,13 +583,16 @@ def export_devices_csv(
         headers={"Content-Disposition": 'attachment; filename="devices.csv"'},
     )
 
+
 @router.post("/groups", dependencies=[Depends(require_permission("devices:write"))])
 def create_group(
     payload: GroupPayload,
     db: Session = Depends(get_db),
     user: AuthUser = Depends(get_current_user),
 ):
-    group = DeviceService(db).create_group(payload.name, user.organization_id, actor_role=user.role)
+    group = DeviceService(db).create_group(
+        payload.name, user.organization_id, actor_role=user.role
+    )
     return {"id": group.id, "name": group.name}
 
 
@@ -571,8 +604,6 @@ def list_groups(
         {"id": g.id, "name": g.name}
         for g in DeviceService(db).list_groups(organization_id=user.organization_id)
     ]
-
-
 
 
 @router.post("/tags", dependencies=[Depends(require_permission("devices:write"))])
@@ -596,7 +627,9 @@ def list_tags(
     ]
 
 
-@router.post("/tags/assign", dependencies=[Depends(require_permission("devices:write"))])
+@router.post(
+    "/tags/assign", dependencies=[Depends(require_permission("devices:write"))]
+)
 def assign_tag(
     payload: DeviceTagAssignPayload,
     db: Session = Depends(get_db),

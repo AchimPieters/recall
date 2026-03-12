@@ -36,7 +36,9 @@ def _ensure_user(username: str, role: str, organization_id: int | None) -> str:
     return create_access_token(subject=username, role=role)
 
 
-def _create_public_key(token: str, *, name: str, organization_id: int, rate_limit_per_minute: int) -> tuple[int, str]:
+def _create_public_key(
+    token: str, *, name: str, organization_id: int, rate_limit_per_minute: int
+) -> tuple[int, str]:
     response = client.post(
         "/api/v1/public-api/keys",
         json={
@@ -114,8 +116,12 @@ def test_db_backed_keys_share_tenant_rate_limit() -> None:
     reset_public_api_rate_limits_for_tests()
     token = _ensure_user("public-key-admin4", role="admin", organization_id=4)
 
-    _, key_one = _create_public_key(token, name="tenant-4-a", organization_id=4, rate_limit_per_minute=2)
-    _, key_two = _create_public_key(token, name="tenant-4-b", organization_id=4, rate_limit_per_minute=2)
+    _, key_one = _create_public_key(
+        token, name="tenant-4-a", organization_id=4, rate_limit_per_minute=2
+    )
+    _, key_two = _create_public_key(
+        token, name="tenant-4-b", organization_id=4, rate_limit_per_minute=2
+    )
 
     first = client.get("/api/public/v1/health", headers={"X-API-Key": key_one})
     second = client.get("/api/public/v1/health", headers={"X-API-Key": key_two})
@@ -132,8 +138,12 @@ def test_db_backed_keys_are_rate_limited_per_tenant() -> None:
     token_org_5 = _ensure_user("public-key-admin5", role="admin", organization_id=5)
     token_org_6 = _ensure_user("public-key-admin6", role="admin", organization_id=6)
 
-    _, key_org_5 = _create_public_key(token_org_5, name="tenant-5", organization_id=5, rate_limit_per_minute=1)
-    _, key_org_6 = _create_public_key(token_org_6, name="tenant-6", organization_id=6, rate_limit_per_minute=1)
+    _, key_org_5 = _create_public_key(
+        token_org_5, name="tenant-5", organization_id=5, rate_limit_per_minute=1
+    )
+    _, key_org_6 = _create_public_key(
+        token_org_6, name="tenant-6", organization_id=6, rate_limit_per_minute=1
+    )
 
     org5_first = client.get("/api/public/v1/health", headers={"X-API-Key": key_org_5})
     org6_first = client.get("/api/public/v1/health", headers={"X-API-Key": key_org_6})
@@ -149,8 +159,12 @@ def test_list_public_api_keys_is_tenant_scoped() -> None:
     token_org_7 = _ensure_user("public-key-admin7", role="admin", organization_id=7)
     token_org_8 = _ensure_user("public-key-admin8", role="admin", organization_id=8)
 
-    _create_public_key(token_org_7, name="org7-key", organization_id=7, rate_limit_per_minute=5)
-    _create_public_key(token_org_8, name="org8-key", organization_id=8, rate_limit_per_minute=5)
+    _create_public_key(
+        token_org_7, name="org7-key", organization_id=7, rate_limit_per_minute=5
+    )
+    _create_public_key(
+        token_org_8, name="org8-key", organization_id=8, rate_limit_per_minute=5
+    )
 
     response = client.get(
         "/api/v1/public-api/keys",
@@ -167,7 +181,9 @@ def test_org_admin_cannot_update_key_from_other_org() -> None:
     token_org_9 = _ensure_user("public-key-admin9", role="admin", organization_id=9)
     token_org_10 = _ensure_user("public-key-admin10", role="admin", organization_id=10)
 
-    key_id, _ = _create_public_key(token_org_10, name="org10-key", organization_id=10, rate_limit_per_minute=5)
+    key_id, _ = _create_public_key(
+        token_org_10, name="org10-key", organization_id=10, rate_limit_per_minute=5
+    )
 
     patch_response = client.patch(
         f"/api/v1/public-api/keys/{key_id}",
@@ -180,12 +196,18 @@ def test_org_admin_cannot_update_key_from_other_org() -> None:
 
 
 def test_superadmin_lists_keys_across_organizations() -> None:
-    super_token = _ensure_user("public-key-superadmin", role="superadmin", organization_id=None)
+    super_token = _ensure_user(
+        "public-key-superadmin", role="superadmin", organization_id=None
+    )
     token_org_11 = _ensure_user("public-key-admin11", role="admin", organization_id=11)
     token_org_12 = _ensure_user("public-key-admin12", role="admin", organization_id=12)
 
-    _create_public_key(token_org_11, name="org11-key", organization_id=11, rate_limit_per_minute=5)
-    _create_public_key(token_org_12, name="org12-key", organization_id=12, rate_limit_per_minute=5)
+    _create_public_key(
+        token_org_11, name="org11-key", organization_id=11, rate_limit_per_minute=5
+    )
+    _create_public_key(
+        token_org_12, name="org12-key", organization_id=12, rate_limit_per_minute=5
+    )
 
     list_response = client.get(
         "/api/v1/public-api/keys",
@@ -199,10 +221,14 @@ def test_superadmin_lists_keys_across_organizations() -> None:
 
 
 def test_superadmin_can_disable_other_org_key() -> None:
-    super_token = _ensure_user("public-key-superadmin2", role="superadmin", organization_id=None)
+    super_token = _ensure_user(
+        "public-key-superadmin2", role="superadmin", organization_id=None
+    )
     token_org_13 = _ensure_user("public-key-admin13", role="admin", organization_id=13)
 
-    key_id, raw_key = _create_public_key(token_org_13, name="org13-key", organization_id=13, rate_limit_per_minute=5)
+    key_id, raw_key = _create_public_key(
+        token_org_13, name="org13-key", organization_id=13, rate_limit_per_minute=5
+    )
 
     patch_response = client.patch(
         f"/api/v1/public-api/keys/{key_id}",

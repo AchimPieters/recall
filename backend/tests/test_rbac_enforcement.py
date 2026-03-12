@@ -1,7 +1,12 @@
 from fastapi import HTTPException
 import pytest
 
-from backend.app.core.auth import AuthUser, ensure_organization_access, oauth2_scheme, role_has_permission
+from backend.app.core.auth import (
+    AuthUser,
+    ensure_organization_access,
+    oauth2_scheme,
+    role_has_permission,
+)
 from backend.app.db.database import Base
 from backend.app.services.device_service import DeviceService
 from backend.app.services.settings_service import SettingsService
@@ -67,7 +72,9 @@ def test_oauth2_password_flow_uses_versioned_token_url() -> None:
     assert oauth2_scheme.model.flows.password.tokenUrl == "/api/v1/token"
 
 
-def test_ensure_organization_access_requires_context_for_non_admin_without_org() -> None:
+def test_ensure_organization_access_requires_context_for_non_admin_without_org() -> (
+    None
+):
     user = AuthUser(username="u1", role="viewer", organization_id=None)
     with pytest.raises(HTTPException, match="Organization context required"):
         ensure_organization_access(user, organization_id=10)

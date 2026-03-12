@@ -11,13 +11,17 @@ from backend.app.repositories.security_repository import SecurityRepository
 client = TestClient(app)
 
 
-def _ensure_user(username: str, password: str, role: str = "viewer", active: bool = True) -> None:
+def _ensure_user(
+    username: str, password: str, role: str = "viewer", active: bool = True
+) -> None:
     Base.metadata.create_all(bind=engine)
     db = SessionLocal()
     try:
         user = db.query(User).filter(User.username == username).first()
         if not user:
-            user = User(username=username, password_hash=get_password_hash(password), role=role)
+            user = User(
+                username=username, password_hash=get_password_hash(password), role=role
+            )
             db.add(user)
         user.password_hash = get_password_hash(password)
         user.role = role
@@ -50,7 +54,9 @@ def test_logout_revokes_refresh_token() -> None:
 def test_password_reset_flow_changes_password() -> None:
     _ensure_user("reset-user", "OldPassword1!", role="viewer")
 
-    req = client.post("/api/v1/auth/password-reset/request", json={"username": "reset-user"})
+    req = client.post(
+        "/api/v1/auth/password-reset/request", json={"username": "reset-user"}
+    )
     assert req.status_code == 200
     token = req.json()["reset_token"]
 
@@ -112,7 +118,9 @@ def test_auth_endpoints_emit_audit_logs() -> None:
     _ensure_user("audit-reset", "ResetPass1!", role="viewer")
 
     # password reset request/confirm
-    req = client.post("/api/v1/auth/password-reset/request", json={"username": "audit-reset"})
+    req = client.post(
+        "/api/v1/auth/password-reset/request", json={"username": "audit-reset"}
+    )
     assert req.status_code == 200
     token = req.json()["reset_token"]
 
@@ -174,13 +182,41 @@ def test_auth_endpoints_emit_audit_logs() -> None:
     db = SessionLocal()
     try:
         repo = SecurityRepository(db)
-        assert len(repo.list_audit_logs(actor_id="audit-reset", action="auth.password_reset.request")) >= 1
-        assert len(repo.list_audit_logs(actor_id="audit-reset", action="auth.password_reset.confirm")) >= 1
-        assert len(repo.list_audit_logs(actor_id="audit-user", action="auth.logout")) >= 1
-        assert len(repo.list_audit_logs(actor_id="audit-admin", action="auth.activate")) >= 1
-        assert len(repo.list_audit_logs(actor_id="audit-admin", action="auth.mfa.setup")) >= 1
-        assert len(repo.list_audit_logs(actor_id="audit-admin", action="auth.mfa.enable")) >= 1
-        assert len(repo.list_audit_logs(actor_id="audit-admin", action="auth.mfa.verify")) >= 1
+        assert (
+            len(
+                repo.list_audit_logs(
+                    actor_id="audit-reset", action="auth.password_reset.request"
+                )
+            )
+            >= 1
+        )
+        assert (
+            len(
+                repo.list_audit_logs(
+                    actor_id="audit-reset", action="auth.password_reset.confirm"
+                )
+            )
+            >= 1
+        )
+        assert (
+            len(repo.list_audit_logs(actor_id="audit-user", action="auth.logout")) >= 1
+        )
+        assert (
+            len(repo.list_audit_logs(actor_id="audit-admin", action="auth.activate"))
+            >= 1
+        )
+        assert (
+            len(repo.list_audit_logs(actor_id="audit-admin", action="auth.mfa.setup"))
+            >= 1
+        )
+        assert (
+            len(repo.list_audit_logs(actor_id="audit-admin", action="auth.mfa.enable"))
+            >= 1
+        )
+        assert (
+            len(repo.list_audit_logs(actor_id="audit-admin", action="auth.mfa.verify"))
+            >= 1
+        )
     finally:
         db.close()
 
@@ -287,8 +323,22 @@ def test_mfa_verify_lockout_after_repeated_failures(monkeypatch) -> None:
     db = SessionLocal()
     try:
         repo = SecurityRepository(db)
-        assert len(repo.list_audit_logs(actor_id="mfa-lock-admin", action="auth.mfa.verify.failed")) >= 2
-        assert len(repo.list_audit_logs(actor_id="mfa-lock-admin", action="auth.mfa.verify.locked")) >= 1
+        assert (
+            len(
+                repo.list_audit_logs(
+                    actor_id="mfa-lock-admin", action="auth.mfa.verify.failed"
+                )
+            )
+            >= 2
+        )
+        assert (
+            len(
+                repo.list_audit_logs(
+                    actor_id="mfa-lock-admin", action="auth.mfa.verify.locked"
+                )
+            )
+            >= 1
+        )
     finally:
         db.close()
 
@@ -361,7 +411,14 @@ def test_mfa_setup_invalid_code_emits_audit_log() -> None:
     db = SessionLocal()
     try:
         repo = SecurityRepository(db)
-        assert len(repo.list_audit_logs(actor_id="mfa-enable-fail-admin", action="auth.mfa.enable.failed")) >= 1
+        assert (
+            len(
+                repo.list_audit_logs(
+                    actor_id="mfa-enable-fail-admin", action="auth.mfa.enable.failed"
+                )
+            )
+            >= 1
+        )
     finally:
         db.close()
 
@@ -405,8 +462,22 @@ def test_mfa_setup_lockout_after_repeated_enable_failures(monkeypatch) -> None:
     db = SessionLocal()
     try:
         repo = SecurityRepository(db)
-        assert len(repo.list_audit_logs(actor_id="mfa-setup-lock-admin", action="auth.mfa.enable.failed")) >= 2
-        assert len(repo.list_audit_logs(actor_id="mfa-setup-lock-admin", action="auth.mfa.enable.locked")) >= 1
+        assert (
+            len(
+                repo.list_audit_logs(
+                    actor_id="mfa-setup-lock-admin", action="auth.mfa.enable.failed"
+                )
+            )
+            >= 2
+        )
+        assert (
+            len(
+                repo.list_audit_logs(
+                    actor_id="mfa-setup-lock-admin", action="auth.mfa.enable.locked"
+                )
+            )
+            >= 1
+        )
     finally:
         db.close()
 

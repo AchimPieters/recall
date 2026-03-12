@@ -54,13 +54,22 @@ def create_public_api_key(
     db: Session = Depends(get_db),
     user: AuthUser = Depends(get_current_user),
 ):
-    if user.organization_id is not None and payload.organization_id != user.organization_id:
-        raise HTTPException(status_code=403, detail="Cross-organization key creation denied")
+    if (
+        user.organization_id is not None
+        and payload.organization_id != user.organization_id
+    ):
+        raise HTTPException(
+            status_code=403, detail="Cross-organization key creation denied"
+        )
 
     raw_key = secrets.token_urlsafe(24)
     row = PublicApiKey(
         name=payload.name.strip(),
-        organization_id=payload.organization_id if user.organization_id is None else user.organization_id,
+        organization_id=(
+            payload.organization_id
+            if user.organization_id is None
+            else user.organization_id
+        ),
         key_hash=hash_token(raw_key),
         rate_limit_per_minute=payload.rate_limit_per_minute,
         is_active=True,
@@ -90,7 +99,9 @@ def update_public_api_key_status(
     if not row:
         raise HTTPException(status_code=404, detail="public api key not found")
     if user.organization_id is not None and row.organization_id != user.organization_id:
-        raise HTTPException(status_code=403, detail="Cross-organization key update denied")
+        raise HTTPException(
+            status_code=403, detail="Cross-organization key update denied"
+        )
 
     row.is_active = payload.is_active
     db.commit()

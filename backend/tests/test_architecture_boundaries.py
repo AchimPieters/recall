@@ -72,5 +72,7 @@ def test_application_code_does_not_use_create_all_runtime_schema_calls() -> None
     for path in sorted(app_root.rglob("*.py")):
         content = path.read_text(encoding="utf-8")
         if "Base.metadata.create_all(" in content:
-            violations.append(str(path.relative_to(Path(__file__).resolve().parents[2])))
+            violations.append(
+                str(path.relative_to(Path(__file__).resolve().parents[2]))
+            )
     assert not violations, "Runtime schema mutation found in: " + ", ".join(violations)

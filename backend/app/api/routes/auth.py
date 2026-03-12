@@ -12,7 +12,11 @@ from sqlalchemy.orm import Session
 
 from backend.app.core.auth import AuthUser, get_current_user, require_role
 from backend.app.core.config import get_settings
-from backend.app.core.mfa import generate_recovery_codes, generate_totp_secret, verify_totp_code
+from backend.app.core.mfa import (
+    generate_recovery_codes,
+    generate_totp_secret,
+    verify_totp_code,
+)
 from backend.app.core.security import (
     create_access_token,
     create_mfa_token,
@@ -73,8 +77,6 @@ class MFAVerifyPayload(BaseModel):
     recovery_code: str | None = Field(default=None, min_length=6, max_length=64)
 
 
-
-
 def _hash_recovery_codes(codes: list[str]) -> list[str]:
     return [hash_token(code.strip().lower()) for code in codes]
 
@@ -95,7 +97,8 @@ def _verify_recovery_code(user: User, recovery_code: str | None) -> bool:
 
 
 def _require_mfa_for_user(user: User) -> bool:
-    return (user.role or '').strip().lower() == 'admin'
+    return (user.role or "").strip().lower() == "admin"
+
 
 def bootstrap_admin(db: Session) -> None:
     admin = (
@@ -155,9 +158,9 @@ def _clear_failed_logins(username: str) -> None:
         failed_login_attempts.pop(username, None)
 
 
-
-
-def _prune_attempts(store: dict[str, list[datetime]], username: str, now: datetime) -> list[datetime]:
+def _prune_attempts(
+    store: dict[str, list[datetime]], username: str, now: datetime
+) -> list[datetime]:
     window = timedelta(minutes=settings_conf.auth_lockout_minutes)
     attempts = store.get(username, [])
     pruned = [attempt for attempt in attempts if now - attempt < window]
@@ -202,6 +205,7 @@ def _record_failed_mfa_setup(username: str, now: datetime) -> None:
 def _clear_failed_mfa_setup(username: str) -> None:
     with failed_mfa_setup_lock:
         failed_mfa_setup_attempts.pop(username, None)
+
 
 def _write_auth_audit(
     sec_repo: SecurityRepository,
@@ -274,7 +278,9 @@ def login(
             user.failed_login_count = int(user.failed_login_count or 0) + 1
             user.last_failed_login_at = now
             if user.failed_login_count >= settings_conf.auth_lockout_threshold:
-                user.locked_until = now + timedelta(minutes=settings_conf.auth_lockout_minutes)
+                user.locked_until = now + timedelta(
+                    minutes=settings_conf.auth_lockout_minutes
+                )
                 user.failed_login_count = 0
             db.commit()
         sec_repo.add_security_event(
@@ -299,7 +305,9 @@ def login(
                 detail="Admin login blocked until MFA setup",
                 ip_address=client_ip,
             )
-            raise HTTPException(status_code=403, detail="MFA setup required for admin account")
+            raise HTTPException(
+                status_code=403, detail="MFA setup required for admin account"
+            )
         return {
             "mfa_required": True,
             "mfa_token": create_mfa_token(subject=user.username),
@@ -579,8 +587,6 @@ def activate_user(
     return {"username": user.username, "active": user.is_active}
 
 
-
-
 @router.post("/auth/mfa/setup", dependencies=[Depends(require_role("admin"))])
 @limiter.limit("30/minute")
 def mfa_setup(
@@ -599,7 +605,9 @@ def mfa_setup(
         recovery_codes = generate_recovery_codes()
         entity.mfa_secret = secret
         entity.mfa_enabled = False
-        entity.mfa_recovery_codes = json.dumps(_hash_recovery_codes(recovery_codes), sort_keys=True)
+        entity.mfa_recovery_codes = json.dumps(
+            _hash_recovery_codes(recovery_codes), sort_keys=True
+        )
         db.commit()
     else:
         secret = entity.mfa_secret
@@ -700,9 +708,13 @@ def mfa_verify(
     if not payload.mfa_token:
         raise HTTPException(status_code=400, detail="mfa_token is required")
     if payload.code and payload.recovery_code:
-        raise HTTPException(status_code=400, detail="Provide either code or recovery_code")
+        raise HTTPException(
+            status_code=400, detail="Provide either code or recovery_code"
+        )
     if not payload.code and not payload.recovery_code:
-        raise HTTPException(status_code=400, detail="Either code or recovery_code is required")
+        raise HTTPException(
+            status_code=400, detail="Either code or recovery_code is required"
+        )
 
     try:
         username = parse_mfa_token(payload.mfa_token)
@@ -732,7 +744,9 @@ def mfa_verify(
         )
         raise HTTPException(status_code=429, detail="MFA temporarily locked")
 
-    valid = verify_totp_code(user.mfa_secret, payload.code or "") or _verify_recovery_code(user, payload.recovery_code)
+    valid = verify_totp_code(
+        user.mfa_secret, payload.code or ""
+    ) or _verify_recovery_code(user, payload.recovery_code)
     if not valid:
         _record_failed_mfa_verify(username, now)
         sec_repo.add_security_event(
@@ -755,7 +769,9 @@ def mfa_verify(
     _clear_failed_mfa_verify(username)
     access = create_access_token(subject=user.username, role=user.role)
     refresh, jti = create_refresh_token(subject=user.username)
-    refresh_exp = datetime.now(timezone.utc) + timedelta(minutes=settings_conf.refresh_token_expire_minutes)
+    refresh_exp = datetime.now(timezone.utc) + timedelta(
+        minutes=settings_conf.refresh_token_expire_minutes
+    )
     sec_repo.create_refresh_token(user.username, hash_token(jti), refresh_exp)
     sec_repo.add_security_event(
         actor=username,

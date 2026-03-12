@@ -3,7 +3,11 @@ from datetime import datetime, timezone
 from sqlalchemy.orm import Session
 
 from backend.app.core.events import PLAYLIST_UPDATED, make_event, publisher
-from backend.app.domain import normalize_datetime, validate_content_item, validate_schedule_window
+from backend.app.domain import (
+    normalize_datetime,
+    validate_content_item,
+    validate_schedule_window,
+)
 from backend.app.models.device import DeviceGroupMember
 from backend.app.models.media import (
     Layout,
@@ -81,7 +85,11 @@ class PlaylistService:
         self.db.add(item)
         self.db.commit()
         self.db.refresh(item)
-        publisher.publish(make_event(PLAYLIST_UPDATED, {"playlist_id": playlist_id, "item_id": item.id}))
+        publisher.publish(
+            make_event(
+                PLAYLIST_UPDATED, {"playlist_id": playlist_id, "item_id": item.id}
+            )
+        )
         return item
 
     def get_items(self, playlist_id: int) -> list[PlaylistItem]:
@@ -115,8 +123,12 @@ class PlaylistService:
         self.db.refresh(assignment)
         return assignment
 
-    def add_rule(self, *, playlist_id: int, rule_type: str, rule_value: str) -> PlaylistRule:
-        rule = PlaylistRule(playlist_id=playlist_id, rule_type=rule_type, rule_value=rule_value)
+    def add_rule(
+        self, *, playlist_id: int, rule_type: str, rule_value: str
+    ) -> PlaylistRule:
+        rule = PlaylistRule(
+            playlist_id=playlist_id, rule_type=rule_type, rule_value=rule_value
+        )
         self.db.add(rule)
         self.db.commit()
         self.db.refresh(rule)
@@ -240,12 +252,18 @@ class PlaylistService:
             return True
         if recurrence.startswith("weekdays:"):
             values = recurrence.split(":", 1)[1]
-            weekdays = {int(v.strip()) for v in values.split(",") if v.strip().isdigit()}
+            weekdays = {
+                int(v.strip()) for v in values.split(",") if v.strip().isdigit()
+            }
             return now.weekday() in weekdays
         return False
 
     def _is_blocked_by_exception(self, schedule_id: int, now: datetime) -> bool:
-        rows = self.db.query(ScheduleException).filter(ScheduleException.schedule_id == schedule_id).all()
+        rows = (
+            self.db.query(ScheduleException)
+            .filter(ScheduleException.schedule_id == schedule_id)
+            .all()
+        )
         for row in rows:
             starts_at = self._normalize(row.starts_at)
             ends_at = self._normalize(row.ends_at)
@@ -254,7 +272,11 @@ class PlaylistService:
         return False
 
     def _is_blocked_by_blackout(self, target: str, now: datetime) -> bool:
-        rows = self.db.query(ScheduleBlackoutWindow).filter(ScheduleBlackoutWindow.target.in_([target, "all"])).all()
+        rows = (
+            self.db.query(ScheduleBlackoutWindow)
+            .filter(ScheduleBlackoutWindow.target.in_([target, "all"]))
+            .all()
+        )
         for row in rows:
             starts_at = self._normalize(row.starts_at)
             ends_at = self._normalize(row.ends_at)
@@ -262,12 +284,16 @@ class PlaylistService:
                 return True
         return False
 
-    def resolve_active_playlist_id_at(self, target: str, at_time: datetime | None = None) -> int | None:
+    def resolve_active_playlist_id_at(
+        self, target: str, at_time: datetime | None = None
+    ) -> int | None:
         now = self._normalize(at_time) or self._utc_now()
         if self._is_blocked_by_blackout(target, now):
             return None
 
-        schedules = self.db.query(Schedule).filter(Schedule.target.in_([target, "all"])).all()
+        schedules = (
+            self.db.query(Schedule).filter(Schedule.target.in_([target, "all"])).all()
+        )
 
         active: list[Schedule] = []
         for sched in schedules:
@@ -290,7 +316,8 @@ class PlaylistService:
             key=lambda s: (
                 0 if s.target == target else 1,
                 -(s.priority or 100),
-                self._normalize(s.starts_at) or datetime.min.replace(tzinfo=timezone.utc),
+                self._normalize(s.starts_at)
+                or datetime.min.replace(tzinfo=timezone.utc),
                 s.id,
             ),
         )
@@ -320,34 +347,56 @@ class PlaylistService:
 
         device_assignments = (
             self.db.query(PlaylistAssignment)
-            .filter(PlaylistAssignment.target_type == "device", PlaylistAssignment.target_id == device_id)
-            .order_by(PlaylistAssignment.is_fallback.asc(), PlaylistAssignment.priority.asc(), PlaylistAssignment.id.asc())
+            .filter(
+                PlaylistAssignment.target_type == "device",
+                PlaylistAssignment.target_id == device_id,
+            )
+            .order_by(
+                PlaylistAssignment.is_fallback.asc(),
+                PlaylistAssignment.priority.asc(),
+                PlaylistAssignment.id.asc(),
+            )
             .all()
         )
         if device_assignments:
             first = device_assignments[0]
             self.validate_playlist_playable(first.playlist_id)
-            return {"playlist_id": first.playlist_id, "source": "device_assignment", "fallback": bool(first.is_fallback)}
+            return {
+                "playlist_id": first.playlist_id,
+                "source": "device_assignment",
+                "fallback": bool(first.is_fallback),
+            }
 
         group_ids = [
             str(row.group_id)
-            for row in self.db.query(DeviceGroupMember).filter(DeviceGroupMember.device_id == device_id).all()
+            for row in self.db.query(DeviceGroupMember)
+            .filter(DeviceGroupMember.device_id == device_id)
+            .all()
         ]
         if group_ids:
             group_assignments = (
                 self.db.query(PlaylistAssignment)
-                .filter(PlaylistAssignment.target_type == "group", PlaylistAssignment.target_id.in_(group_ids))
-                .order_by(PlaylistAssignment.is_fallback.asc(), PlaylistAssignment.priority.asc(), PlaylistAssignment.id.asc())
+                .filter(
+                    PlaylistAssignment.target_type == "group",
+                    PlaylistAssignment.target_id.in_(group_ids),
+                )
+                .order_by(
+                    PlaylistAssignment.is_fallback.asc(),
+                    PlaylistAssignment.priority.asc(),
+                    PlaylistAssignment.id.asc(),
+                )
                 .all()
             )
             if group_assignments:
                 first = group_assignments[0]
                 self.validate_playlist_playable(first.playlist_id)
-                return {"playlist_id": first.playlist_id, "source": "group_assignment", "fallback": bool(first.is_fallback)}
+                return {
+                    "playlist_id": first.playlist_id,
+                    "source": "group_assignment",
+                    "fallback": bool(first.is_fallback),
+                }
 
         return {"playlist_id": None, "source": "none"}
-
-
 
     def resolve_active_media_asset(self, device_id: str) -> dict | None:
         resolved = self.resolve_for_device(device_id)
@@ -357,7 +406,10 @@ class PlaylistService:
 
         item = (
             self.db.query(PlaylistItem)
-            .filter(PlaylistItem.playlist_id == playlist_id, PlaylistItem.media_id.isnot(None))
+            .filter(
+                PlaylistItem.playlist_id == playlist_id,
+                PlaylistItem.media_id.isnot(None),
+            )
             .order_by(PlaylistItem.position.asc(), PlaylistItem.id.asc())
             .first()
         )
@@ -388,7 +440,9 @@ class PlaylistService:
             return []
 
         # Pick most recently created layout as active baseline.
-        layout = sorted(layouts, key=lambda layout_item: layout_item.id, reverse=True)[0]
+        layout = sorted(layouts, key=lambda layout_item: layout_item.id, reverse=True)[
+            0
+        ]
         preview = self.get_layout_preview(layout.id)
         zones: list[dict] = []
         fallback = self.resolve_for_device(device_id).get("playlist_id")
@@ -420,18 +474,28 @@ class PlaylistService:
         width: int = 1920,
         height: int = 1080,
     ) -> Zone:
-        zone = Zone(layout_id=layout_id, name=name, x=x, y=y, width=width, height=height)
+        zone = Zone(
+            layout_id=layout_id, name=name, x=x, y=y, width=width, height=height
+        )
         self.db.add(zone)
         self.db.commit()
         self.db.refresh(zone)
         return zone
 
-    def assign_zone_playlist(self, *, zone_id: int, playlist_id: int) -> ZonePlaylistAssignment:
-        assignment = self.db.query(ZonePlaylistAssignment).filter(ZonePlaylistAssignment.zone_id == zone_id).first()
+    def assign_zone_playlist(
+        self, *, zone_id: int, playlist_id: int
+    ) -> ZonePlaylistAssignment:
+        assignment = (
+            self.db.query(ZonePlaylistAssignment)
+            .filter(ZonePlaylistAssignment.zone_id == zone_id)
+            .first()
+        )
         if assignment:
             assignment.playlist_id = playlist_id
         else:
-            assignment = ZonePlaylistAssignment(zone_id=zone_id, playlist_id=playlist_id)
+            assignment = ZonePlaylistAssignment(
+                zone_id=zone_id, playlist_id=playlist_id
+            )
             self.db.add(assignment)
         self.db.commit()
         self.db.refresh(assignment)
@@ -442,11 +506,20 @@ class PlaylistService:
         if not layout:
             return {"layout": None, "zones": []}
 
-        zones = self.db.query(Zone).filter(Zone.layout_id == layout_id).order_by(Zone.id.asc()).all()
+        zones = (
+            self.db.query(Zone)
+            .filter(Zone.layout_id == layout_id)
+            .order_by(Zone.id.asc())
+            .all()
+        )
         zone_ids = [z.id for z in zones]
         assignments = {}
         if zone_ids:
-            for row in self.db.query(ZonePlaylistAssignment).filter(ZonePlaylistAssignment.zone_id.in_(zone_ids)).all():
+            for row in (
+                self.db.query(ZonePlaylistAssignment)
+                .filter(ZonePlaylistAssignment.zone_id.in_(zone_ids))
+                .all()
+            ):
                 assignments[row.zone_id] = row.playlist_id
 
         return {

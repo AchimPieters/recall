@@ -2,7 +2,9 @@ from backend.app.core import tracing as tracing_module
 
 
 def test_init_tracing_returns_false_without_endpoint(monkeypatch) -> None:
-    monkeypatch.setattr(tracing_module.get_settings(), "otel_exporter_otlp_endpoint", "")
+    monkeypatch.setattr(
+        tracing_module.get_settings(), "otel_exporter_otlp_endpoint", ""
+    )
     tracing_module.init_tracing.cache_clear()
     assert tracing_module.init_tracing("recall-api") is False
 

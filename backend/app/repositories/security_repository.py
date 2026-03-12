@@ -69,7 +69,9 @@ class SecurityRepository:
         self.db.refresh(record)
         return record
 
-    def get_active_password_reset_token(self, token_hash: str) -> PasswordResetToken | None:
+    def get_active_password_reset_token(
+        self, token_hash: str
+    ) -> PasswordResetToken | None:
         return (
             self.db.query(PasswordResetToken)
             .filter(
@@ -79,7 +81,9 @@ class SecurityRepository:
             .first()
         )
 
-    def mark_password_reset_token_used(self, token_hash: str, used_at: datetime) -> None:
+    def mark_password_reset_token_used(
+        self, token_hash: str, used_at: datetime
+    ) -> None:
         token = self.get_active_password_reset_token(token_hash)
         if token:
             token.used_at = used_at

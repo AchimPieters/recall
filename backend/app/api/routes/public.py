@@ -15,5 +15,7 @@ class PublicPingResponse(BaseModel):
 
 
 @router.get("/health", response_model=PublicPingResponse)
-def public_health(context: PublicApiContext = Depends(get_public_api_context)) -> PublicPingResponse:
+def public_health(
+    context: PublicApiContext = Depends(get_public_api_context),
+) -> PublicPingResponse:
     return PublicPingResponse(status="ok", tenant=context.tenant, version="v1")

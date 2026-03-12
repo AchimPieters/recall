@@ -13,7 +13,9 @@ class DomainEvent:
 
 
 def make_event(name: str, payload: dict[str, Any]) -> DomainEvent:
-    return DomainEvent(name=name, payload=payload, occurred_at=datetime.now(timezone.utc))
+    return DomainEvent(
+        name=name, payload=payload, occurred_at=datetime.now(timezone.utc)
+    )
 
 
 DEVICE_REGISTERED = "device_registered"

@@ -9,13 +9,20 @@ from backend.app.services.device_service import DeviceService
 client = TestClient(app)
 
 
-def _ensure_user(username: str, password: str, role: str = "admin", organization_id: int | None = None) -> None:
+def _ensure_user(
+    username: str,
+    password: str,
+    role: str = "admin",
+    organization_id: int | None = None,
+) -> None:
     Base.metadata.create_all(bind=engine)
     db = SessionLocal()
     try:
         user = db.query(User).filter(User.username == username).first()
         if not user:
-            user = User(username=username, password_hash=get_password_hash(password), role=role)
+            user = User(
+                username=username, password_hash=get_password_hash(password), role=role
+            )
             db.add(user)
         user.password_hash = get_password_hash(password)
         user.role = role
@@ -62,7 +69,9 @@ def test_list_devices_accepts_zulu_timestamp() -> None:
 
     db = SessionLocal()
     try:
-        DeviceService(db).register("fleet-dev-1", "Fleet Device", None, "1.0.0", organization_id=None)
+        DeviceService(db).register(
+            "fleet-dev-1", "Fleet Device", None, "1.0.0", organization_id=None
+        )
     finally:
         db.close()
 
@@ -114,7 +123,9 @@ def test_export_devices_csv_returns_csv_payload() -> None:
 
     db = SessionLocal()
     try:
-        DeviceService(db).register("csv-dev-1", "CSV Device", None, "1.0.0", organization_id=None)
+        DeviceService(db).register(
+            "csv-dev-1", "CSV Device", None, "1.0.0", organization_id=None
+        )
     finally:
         db.close()
 
@@ -125,7 +136,9 @@ def test_export_devices_csv_returns_csv_payload() -> None:
 
     assert response.status_code == 200
     assert response.headers["content-type"].startswith("text/csv")
-    assert "attachment; filename=\"devices.csv\"" == response.headers["content-disposition"]
+    assert (
+        'attachment; filename="devices.csv"' == response.headers["content-disposition"]
+    )
     lines = response.text.splitlines()
     assert lines[0] == "id,name,status,version,last_seen,organization_id"
     assert any(line.startswith("csv-dev-1,CSV Device,") for line in lines[1:])

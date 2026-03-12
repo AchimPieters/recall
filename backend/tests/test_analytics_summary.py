@@ -18,7 +18,13 @@ def _seed_user() -> str:
     try:
         user = db.query(User).filter(User.username == "analytics-admin").first()
         if not user:
-            user = User(username="analytics-admin", password_hash="x", role="admin", organization_id=1, is_active=True)
+            user = User(
+                username="analytics-admin",
+                password_hash="x",
+                role="admin",
+                organization_id=1,
+                is_active=True,
+            )
             db.add(user)
         else:
             user.role = "admin"
@@ -42,13 +48,53 @@ def _seed_data() -> None:
         foreign = Device(id="a-3", name="A3", status="online", organization_id=2)
         db.add_all([online, offline, foreign])
 
-        db.add(Event(category="playback", action="impression", actor="agent", payload="{}", organization_id=1))
-        db.add(Event(category="playback", action="impression", actor="agent", payload="{}", organization_id=2))
+        db.add(
+            Event(
+                category="playback",
+                action="impression",
+                actor="agent",
+                payload="{}",
+                organization_id=1,
+            )
+        )
+        db.add(
+            Event(
+                category="playback",
+                action="impression",
+                actor="agent",
+                payload="{}",
+                organization_id=2,
+            )
+        )
 
         now = datetime.now(timezone.utc)
-        db.add(DeviceLog(device_id="a-1", level="error", action="playback", message="err", timestamp=now - timedelta(hours=1)))
-        db.add(DeviceLog(device_id="a-1", level="info", action="heartbeat", message="ok", timestamp=now - timedelta(hours=2)))
-        db.add(DeviceLog(device_id="a-3", level="error", action="playback", message="foreign", timestamp=now - timedelta(hours=1)))
+        db.add(
+            DeviceLog(
+                device_id="a-1",
+                level="error",
+                action="playback",
+                message="err",
+                timestamp=now - timedelta(hours=1),
+            )
+        )
+        db.add(
+            DeviceLog(
+                device_id="a-1",
+                level="info",
+                action="heartbeat",
+                message="ok",
+                timestamp=now - timedelta(hours=2),
+            )
+        )
+        db.add(
+            DeviceLog(
+                device_id="a-3",
+                level="error",
+                action="playback",
+                message="foreign",
+                timestamp=now - timedelta(hours=1),
+            )
+        )
         db.commit()
     finally:
         db.close()

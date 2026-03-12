@@ -77,7 +77,6 @@ def list_alerts(
     ]
 
 
-
 @router.post(
     "/alerts/{alert_id}/ack",
     dependencies=[Depends(require_role("admin", "operator"))],
@@ -87,7 +86,9 @@ def acknowledge_alert(
     db: Session = Depends(get_db),
     user: AuthUser = Depends(get_current_user),
 ):
-    visible = DeviceService(db).list_alerts(status=None, organization_id=user.organization_id)
+    visible = DeviceService(db).list_alerts(
+        status=None, organization_id=user.organization_id
+    )
     if user.organization_id is not None and not any(a.id == alert_id for a in visible):
         raise HTTPException(status_code=404, detail="alert not found")
 

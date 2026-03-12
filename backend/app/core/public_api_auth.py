@@ -68,7 +68,9 @@ def _enforce_tenant_rate_limit(*, tenant: str, limit: int, now: datetime) -> Non
     with _rate_limit_lock:
         attempts = _prune_entries(cache_key, now)
         if len(attempts) >= limit:
-            raise HTTPException(status_code=429, detail="Public API tenant rate limit exceeded")
+            raise HTTPException(
+                status_code=429, detail="Public API tenant rate limit exceeded"
+            )
         attempts.append(now)
         _rate_limit_store[cache_key] = attempts
 
@@ -82,7 +84,11 @@ def get_public_api_context(
 
     hashed = hash_token(x_api_key)
     try:
-        row = db.query(PublicApiKey).filter(PublicApiKey.key_hash == hashed, PublicApiKey.is_active == True).first()  # noqa: E712
+        row = (
+            db.query(PublicApiKey)
+            .filter(PublicApiKey.key_hash == hashed, PublicApiKey.is_active.is_(True))
+            .first()
+        )
     except OperationalError:
         row = None
 
@@ -93,7 +99,9 @@ def get_public_api_context(
         if client is None:
             raise HTTPException(status_code=401, detail="Invalid API key")
         now = datetime.now(timezone.utc)
-        _enforce_tenant_rate_limit(tenant=client.tenant, limit=client.rate_limit_per_minute, now=now)
+        _enforce_tenant_rate_limit(
+            tenant=client.tenant, limit=client.rate_limit_per_minute, now=now
+        )
         return PublicApiContext(tenant=client.tenant, api_key_id=x_api_key[:6])
 
     now = datetime.now(timezone.utc)

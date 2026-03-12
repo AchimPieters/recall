@@ -49,7 +49,9 @@ def _split_statements(sql: str) -> Iterable[str]:
             yield statement
 
 
-def apply_sql_migrations_connection(conn: Connection, migrations_path: Path | None = None) -> list[str]:
+def apply_sql_migrations_connection(
+    conn: Connection, migrations_path: Path | None = None
+) -> list[str]:
     applied: list[str] = []
     migration_files = discover_migration_files(migrations_path)
 
@@ -70,9 +72,7 @@ def apply_sql_migrations_connection(conn: Connection, migrations_path: Path | No
                     conn.exec_driver_sql(statement)
 
         conn.execute(
-            text(
-                f"INSERT INTO {MIGRATION_TABLE} (version) VALUES (:version)"
-            ),
+            text(f"INSERT INTO {MIGRATION_TABLE} (version) VALUES (:version)"),
             {"version": version},
         )
         applied.append(version)
@@ -80,6 +80,8 @@ def apply_sql_migrations_connection(conn: Connection, migrations_path: Path | No
     return applied
 
 
-def apply_sql_migrations(engine: Engine, migrations_path: Path | None = None) -> list[str]:
+def apply_sql_migrations(
+    engine: Engine, migrations_path: Path | None = None
+) -> list[str]:
     with engine.begin() as conn:
         return apply_sql_migrations_connection(conn, migrations_path=migrations_path)

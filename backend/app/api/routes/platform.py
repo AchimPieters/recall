@@ -62,7 +62,9 @@ def devices_summary(
     org_scope, include_all_tenants = _resolve_scope(user)
     svc = DeviceService(db)
     svc.mark_presence(organization_id=org_scope)
-    devices_list = svc.list_devices(organization_id=None if include_all_tenants else org_scope)
+    devices_list = svc.list_devices(
+        organization_id=None if include_all_tenants else org_scope
+    )
     device_count.set(len(devices_list))
     device_online.set(len([d for d in devices_list if d.status == "online"]))
     return devices_list
@@ -75,36 +77,67 @@ def metrics():
     )
 
 
-@router.get("/workers/status", dependencies=[Depends(require_role("admin", "operator"))])
+@router.get(
+    "/workers/status", dependencies=[Depends(require_role("admin", "operator"))]
+)
 def workers_status():
     return get_worker_snapshot()
 
 
-@router.get("/observability/summary", dependencies=[Depends(require_role("admin", "operator"))])
+@router.get(
+    "/observability/summary", dependencies=[Depends(require_role("admin", "operator"))]
+)
 def observability_summary(
     db: Session = Depends(get_db),
     user: AuthUser = Depends(get_current_user),
 ):
     org_scope, include_all_tenants = _resolve_scope(user)
     svc = DeviceService(db)
-    devices_list = svc.list_devices(organization_id=None if include_all_tenants else org_scope)
+    devices_list = svc.list_devices(
+        organization_id=None if include_all_tenants else org_scope
+    )
 
     if include_all_tenants:
         total_alerts = db.execute(text("SELECT COUNT(*) FROM alerts")).scalar() or 0
-        open_alerts = db.execute(text("SELECT COUNT(*) FROM alerts WHERE status = 'open'")).scalar() or 0
-        resolved_alerts = db.execute(text("SELECT COUNT(*) FROM alerts WHERE status = 'resolved'")).scalar() or 0
+        open_alerts = (
+            db.execute(
+                text("SELECT COUNT(*) FROM alerts WHERE status = 'open'")
+            ).scalar()
+            or 0
+        )
+        resolved_alerts = (
+            db.execute(
+                text("SELECT COUNT(*) FROM alerts WHERE status = 'resolved'")
+            ).scalar()
+            or 0
+        )
     else:
         params = {"org": org_scope}
         scope_filter = "organization_id = :org"
-        total_alerts = db.execute(text(f"SELECT COUNT(*) FROM alerts WHERE {scope_filter}"), params).scalar() or 0
-        open_alerts = db.execute(
-            text(f"SELECT COUNT(*) FROM alerts WHERE {scope_filter} AND status = 'open'"),
-            params,
-        ).scalar() or 0
-        resolved_alerts = db.execute(
-            text(f"SELECT COUNT(*) FROM alerts WHERE {scope_filter} AND status = 'resolved'"),
-            params,
-        ).scalar() or 0
+        total_alerts = (
+            db.execute(
+                text(f"SELECT COUNT(*) FROM alerts WHERE {scope_filter}"), params
+            ).scalar()
+            or 0
+        )
+        open_alerts = (
+            db.execute(
+                text(
+                    f"SELECT COUNT(*) FROM alerts WHERE {scope_filter} AND status = 'open'"
+                ),
+                params,
+            ).scalar()
+            or 0
+        )
+        resolved_alerts = (
+            db.execute(
+                text(
+                    f"SELECT COUNT(*) FROM alerts WHERE {scope_filter} AND status = 'resolved'"
+                ),
+                params,
+            ).scalar()
+            or 0
+        )
 
     return {
         "devices": {

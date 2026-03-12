@@ -103,7 +103,9 @@ def normalize_permission(permission: str) -> str:
 
 def role_has_permission(role: str, permission: str) -> bool:
     normalized = normalize_permission(permission)
-    normalized_perms = {normalize_permission(p) for p in ROLE_PERMISSIONS.get(role, set())}
+    normalized_perms = {
+        normalize_permission(p) for p in ROLE_PERMISSIONS.get(role, set())
+    }
 
     if normalized in normalized_perms:
         return True

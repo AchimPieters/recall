@@ -15,7 +15,9 @@ def test_migrate_cli_dry_run_prints_message(monkeypatch, capsys) -> None:
 
 def test_migrate_cli_reports_applied_migrations(monkeypatch, capsys) -> None:
     monkeypatch.setattr("sys.argv", ["migrate_cli"])
-    monkeypatch.setattr(migrate_cli, "apply_sql_migrations", lambda _: ["0001_init.sql", "0002_add.sql"])
+    monkeypatch.setattr(
+        migrate_cli, "apply_sql_migrations", lambda _: ["0001_init.sql", "0002_add.sql"]
+    )
 
     code = migrate_cli.main()
     output = capsys.readouterr().out

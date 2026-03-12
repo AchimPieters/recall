@@ -43,8 +43,12 @@ def test_alembic_bridge_applies_sql_migrations(tmp_path: Path) -> None:
     assert "test_table" in table_names
 
     with engine.connect() as conn:
-        applied = conn.execute(text("SELECT COUNT(*) FROM schema_migrations")).scalar_one()
-        seeded = conn.execute(text("SELECT COUNT(*) FROM test_table WHERE id = 1")).scalar_one()
+        applied = conn.execute(
+            text("SELECT COUNT(*) FROM schema_migrations")
+        ).scalar_one()
+        seeded = conn.execute(
+            text("SELECT COUNT(*) FROM test_table WHERE id = 1")
+        ).scalar_one()
 
     assert applied == 2
     assert seeded == 1

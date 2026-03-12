@@ -38,7 +38,11 @@ def test_settings_version_history_and_rollback() -> None:
     assert history[0]["setting_value"] == "Recall B"
 
     rolled = service.rollback(
-        key="site_name", target_version=1, scope="global", organization_id=None, changed_by="admin"
+        key="site_name",
+        target_version=1,
+        scope="global",
+        organization_id=None,
+        changed_by="admin",
     )
     assert rolled["version"] == 3
     assert rolled["value"] == "Recall A"
@@ -47,8 +51,14 @@ def test_settings_version_history_and_rollback() -> None:
     assert latest.value == "Recall A"
     assert latest.version == 3
 
-    versions = db.query(SettingVersion).filter(SettingVersion.setting_key == "site_name").all()
+    versions = (
+        db.query(SettingVersion).filter(SettingVersion.setting_key == "site_name").all()
+    )
     assert len(versions) == 3
 
-    audit = db.query(SecurityAuditEvent).filter(SecurityAuditEvent.event_type == "settings_rollback").all()
+    audit = (
+        db.query(SecurityAuditEvent)
+        .filter(SecurityAuditEvent.event_type == "settings_rollback")
+        .all()
+    )
     assert len(audit) == 1

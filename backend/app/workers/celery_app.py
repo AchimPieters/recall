@@ -40,7 +40,10 @@ def get_worker_snapshot() -> dict:
         }
 
     workers = sorted(
-        set(stats.keys()) | set(active.keys()) | set(scheduled.keys()) | set(reserved.keys())
+        set(stats.keys())
+        | set(active.keys())
+        | set(scheduled.keys())
+        | set(reserved.keys())
     )
     return {
         "available": bool(workers),

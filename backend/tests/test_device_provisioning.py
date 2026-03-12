@@ -111,10 +111,15 @@ def test_device_api_requires_certificate_when_enabled() -> None:
         missing_header = client.post(
             "/api/v1/device/heartbeat",
             json={"id": "provisioned-device-cert", "metrics": {"state": "ok"}},
-            headers={"Authorization": f"Bearer {token}", "X-Device-Protocol-Version": "1"},
+            headers={
+                "Authorization": f"Bearer {token}",
+                "X-Device-Protocol-Version": "1",
+            },
         )
         assert missing_header.status_code == 401
-        assert missing_header.json()["detail"] == "Device certificate fingerprint required"
+        assert (
+            missing_header.json()["detail"] == "Device certificate fingerprint required"
+        )
 
         ok = client.post(
             "/api/v1/device/heartbeat",

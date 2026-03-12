@@ -14,7 +14,9 @@ def _ensure_user(username: str, password: str, role: str = "admin") -> None:
     try:
         user = db.query(User).filter(User.username == username).first()
         if not user:
-            user = User(username=username, password_hash=get_password_hash(password), role=role)
+            user = User(
+                username=username, password_hash=get_password_hash(password), role=role
+            )
             db.add(user)
         user.password_hash = get_password_hash(password)
         user.role = role
@@ -24,13 +26,16 @@ def _ensure_user(username: str, password: str, role: str = "admin") -> None:
         db.close()
 
 
-
 def test_register_rejects_unsupported_device_protocol_version() -> None:
     _ensure_user("protocol-admin", "AdminPass1!", role="admin")
     token = create_access_token(subject="protocol-admin", role="admin")
     response = client.post(
         "/api/v1/device/register",
-        json={"id": "proto-dev-unsupported", "name": "Proto Device", "version": "1.0.0"},
+        json={
+            "id": "proto-dev-unsupported",
+            "name": "Proto Device",
+            "version": "1.0.0",
+        },
         headers={
             "Authorization": f"Bearer {token}",
             "X-Device-Protocol-Version": "2",
@@ -60,7 +65,11 @@ def test_register_accepts_supported_minor_device_protocol_version() -> None:
     token = create_access_token(subject="protocol-admin", role="admin")
     response = client.post(
         "/api/v1/device/register",
-        json={"id": "proto-dev-supported-minor", "name": "Proto Device", "version": "1.0.0"},
+        json={
+            "id": "proto-dev-supported-minor",
+            "name": "Proto Device",
+            "version": "1.0.0",
+        },
         headers={
             "Authorization": f"Bearer {token}",
             "X-Device-Protocol-Version": "1.2",
@@ -75,7 +84,11 @@ def test_register_rejects_unsupported_major_device_protocol_version() -> None:
     token = create_access_token(subject="protocol-admin", role="admin")
     response = client.post(
         "/api/v1/device/register",
-        json={"id": "proto-dev-unsupported-major", "name": "Proto Device", "version": "1.0.0"},
+        json={
+            "id": "proto-dev-unsupported-major",
+            "name": "Proto Device",
+            "version": "1.0.0",
+        },
         headers={
             "Authorization": f"Bearer {token}",
             "X-Device-Protocol-Version": "2.0",

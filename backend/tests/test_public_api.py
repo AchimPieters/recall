@@ -62,9 +62,15 @@ def test_public_api_rate_limit_is_shared_per_tenant_across_keys() -> None:
 def test_public_api_rate_limit_is_isolated_between_tenants() -> None:
     _set_public_keys("public-key-1:tenant-a:1,public-key-2:tenant-b:1")
 
-    tenant_a_first = client.get("/api/public/v1/health", headers={"X-API-Key": "public-key-1"})
-    tenant_b_first = client.get("/api/public/v1/health", headers={"X-API-Key": "public-key-2"})
-    tenant_a_second = client.get("/api/public/v1/health", headers={"X-API-Key": "public-key-1"})
+    tenant_a_first = client.get(
+        "/api/public/v1/health", headers={"X-API-Key": "public-key-1"}
+    )
+    tenant_b_first = client.get(
+        "/api/public/v1/health", headers={"X-API-Key": "public-key-2"}
+    )
+    tenant_a_second = client.get(
+        "/api/public/v1/health", headers={"X-API-Key": "public-key-1"}
+    )
 
     assert tenant_a_first.status_code == 200
     assert tenant_b_first.status_code == 200

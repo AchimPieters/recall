@@ -64,7 +64,9 @@ class PublicApiKey(Base):
     __tablename__ = "public_api_keys"
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
-    organization_id: Mapped[int | None] = mapped_column(Integer, nullable=True, index=True)
+    organization_id: Mapped[int | None] = mapped_column(
+        Integer, nullable=True, index=True
+    )
     name: Mapped[str] = mapped_column(String(255), nullable=False)
     key_hash: Mapped[str] = mapped_column(String(64), unique=True, index=True)
     rate_limit_per_minute: Mapped[int] = mapped_column(Integer, default=60)

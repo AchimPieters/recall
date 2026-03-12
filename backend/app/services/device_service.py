@@ -53,8 +53,6 @@ class DeviceService:
             return dt.replace(tzinfo=timezone.utc)
         return dt
 
-
-
     @staticmethod
     def _hash_value(value: str) -> str:
         return hashlib.sha256(value.encode("utf-8")).hexdigest()
@@ -103,7 +101,11 @@ class DeviceService:
             .first()
         )
         now = self._utc_now()
-        if not token_row or token_row.used_at is not None or self._normalize(token_row.expires_at) < now:
+        if (
+            not token_row
+            or token_row.used_at is not None
+            or self._normalize(token_row.expires_at) < now
+        ):
             raise ValueError("invalid or expired provisioning token")
 
         device = self.register(
@@ -136,6 +138,7 @@ class DeviceService:
             "certificate_fingerprint": fingerprint,
             "provisioned_at": now.isoformat(),
         }
+
     def register(
         self,
         device_id: str,
@@ -159,7 +162,12 @@ class DeviceService:
         device.last_seen = self._utc_now()
         self.db.commit()
         self.db.refresh(device)
-        publisher.publish(make_event(DEVICE_REGISTERED, {"device_id": device_id, "organization_id": organization_id}))
+        publisher.publish(
+            make_event(
+                DEVICE_REGISTERED,
+                {"device_id": device_id, "organization_id": organization_id},
+            )
+        )
         return device
 
     def heartbeat(self, device_id: str, metrics: dict | None = None) -> Device | None:
@@ -232,12 +240,18 @@ class DeviceService:
         now = self._utc_now()
         changed = 0
         for device in devices:
-            age = now - (self._normalize(device.last_seen) or now) if device.last_seen else None
+            age = (
+                now - (self._normalize(device.last_seen) or now)
+                if device.last_seen
+                else None
+            )
             if not device.last_seen:
                 new_status = "stale"
             elif age and age > timedelta(seconds=settings.heartbeat_timeout_seconds):
                 new_status = "offline"
-            elif age and age > timedelta(seconds=max(5, settings.heartbeat_timeout_seconds // 2)):
+            elif age and age > timedelta(
+                seconds=max(5, settings.heartbeat_timeout_seconds // 2)
+            ):
                 new_status = "stale"
             elif device.status == "error":
                 new_status = "error"
@@ -275,13 +289,15 @@ class DeviceService:
         if last_seen_before is not None:
             query = query.filter(Device.last_seen <= last_seen_before)
         if group_id is not None:
-            query = query.join(DeviceGroupMember, DeviceGroupMember.device_id == Device.id).filter(
-                DeviceGroupMember.group_id == group_id
-            )
+            query = query.join(
+                DeviceGroupMember, DeviceGroupMember.device_id == Device.id
+            ).filter(DeviceGroupMember.group_id == group_id)
         if tag:
-            query = query.join(DeviceTagLink, DeviceTagLink.device_id == Device.id).join(
-                DeviceTag, DeviceTag.id == DeviceTagLink.tag_id
-            ).filter(DeviceTag.name == tag)
+            query = (
+                query.join(DeviceTagLink, DeviceTagLink.device_id == Device.id)
+                .join(DeviceTag, DeviceTag.id == DeviceTagLink.tag_id)
+                .filter(DeviceTag.name == tag)
+            )
         return query.order_by(Device.id.asc()).all()
 
     def create_group(
@@ -388,8 +404,7 @@ class DeviceService:
             known_versions = self._group_known_versions(device_ids)
             if target_version not in known_versions:
                 raise ValueError(
-                    "unknown rollback target_version for group: "
-                    f"{target_version}"
+                    "unknown rollback target_version for group: " f"{target_version}"
                 )
 
         if action in {"update", "rollback"} and target_version:
@@ -443,7 +458,16 @@ class DeviceService:
         )
 
         if action == "update":
-            publisher.publish(make_event(OTA_UPDATE_STARTED, {"group_id": group_id, "target_version": target_version, "device_ids": selected_device_ids}))
+            publisher.publish(
+                make_event(
+                    OTA_UPDATE_STARTED,
+                    {
+                        "group_id": group_id,
+                        "target_version": target_version,
+                        "device_ids": selected_device_ids,
+                    },
+                )
+            )
 
         for device_id in selected_device_ids:
             message = f"bulk action={action}"
@@ -467,7 +491,9 @@ class DeviceService:
             "action": action,
             "accepted": len(selected_device_ids),
             "device_ids": selected_device_ids,
-            "deferred_device_ids": [d for d in device_ids if d not in set(selected_device_ids)],
+            "deferred_device_ids": [
+                d for d in device_ids if d not in set(selected_device_ids)
+            ],
             "event_id": event["id"],
             **details,
         }
@@ -480,7 +506,6 @@ class DeviceService:
         if not match:
             return None
         return int(match.group(1)), int(match.group(2)), int(match.group(3))
-
 
     def _group_known_versions(self, device_ids: list[str]) -> set[str]:
         if not device_ids:
@@ -550,7 +575,9 @@ class DeviceService:
     def create_tag(self, name: str, organization_id: int | None) -> DeviceTag:
         existing = (
             self.db.query(DeviceTag)
-            .filter(DeviceTag.name == name, DeviceTag.organization_id == organization_id)
+            .filter(
+                DeviceTag.name == name, DeviceTag.organization_id == organization_id
+            )
             .first()
         )
         if existing:
@@ -567,11 +594,15 @@ class DeviceService:
             query = query.filter(DeviceTag.organization_id == organization_id)
         return query.order_by(DeviceTag.name.asc()).all()
 
-    def assign_tag(self, device_id: str, tag_name: str, organization_id: int | None) -> dict:
+    def assign_tag(
+        self, device_id: str, tag_name: str, organization_id: int | None
+    ) -> dict:
         tag = self.create_tag(tag_name, organization_id)
         existing = (
             self.db.query(DeviceTagLink)
-            .filter(DeviceTagLink.device_id == device_id, DeviceTagLink.tag_id == tag.id)
+            .filter(
+                DeviceTagLink.device_id == device_id, DeviceTagLink.tag_id == tag.id
+            )
             .first()
         )
         if not existing:
@@ -596,7 +627,11 @@ class DeviceService:
         self.db.add(alert)
         self.db.commit()
         self.db.refresh(alert)
-        publisher.publish(make_event(ALERT_TRIGGERED, {"alert_id": alert.id, "level": normalized_level}))
+        publisher.publish(
+            make_event(
+                ALERT_TRIGGERED, {"alert_id": alert.id, "level": normalized_level}
+            )
+        )
         return alert
 
     def list_alerts(
@@ -634,7 +669,6 @@ class DeviceService:
         self.db.refresh(alert)
         return alert
 
-
     def enqueue_command(
         self,
         *,
@@ -661,9 +695,15 @@ class DeviceService:
         return command
 
     def fetch_commands(self, device_id: str) -> list[dict]:
-        return [c for c in _device_command_queue.get(device_id, []) if c.get("status") == "pending"]
+        return [
+            c
+            for c in _device_command_queue.get(device_id, [])
+            if c.get("status") == "pending"
+        ]
 
-    def ack_command(self, device_id: str, command_id: str, status: str, detail: str | None = None) -> dict | None:
+    def ack_command(
+        self, device_id: str, command_id: str, status: str, detail: str | None = None
+    ) -> dict | None:
         for command in _device_command_queue.get(device_id, []):
             if command["command_id"] == command_id:
                 command["status"] = status

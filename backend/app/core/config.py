@@ -28,7 +28,9 @@ class Settings(BaseModel):
         == "true"
     )
     trust_forwarded_proto: bool = Field(
-        default_factory=lambda: os.getenv("RECALL_TRUST_FORWARDED_PROTO", "false").lower()
+        default_factory=lambda: os.getenv(
+            "RECALL_TRUST_FORWARDED_PROTO", "false"
+        ).lower()
         == "true"
     )
     allowed_hosts: list[str] = Field(
@@ -67,7 +69,9 @@ class Settings(BaseModel):
         default_factory=lambda: os.getenv("REDIS_URL", "redis://localhost:6379/0")
     )
     worker_default_retry_delay_seconds: int = Field(
-        default_factory=lambda: int(os.getenv("RECALL_WORKER_RETRY_DELAY_SECONDS", "10")),
+        default_factory=lambda: int(
+            os.getenv("RECALL_WORKER_RETRY_DELAY_SECONDS", "10")
+        ),
         ge=1,
     )
     worker_max_retries: int = Field(
@@ -98,36 +102,49 @@ class Settings(BaseModel):
         ge=8,
     )
     password_require_upper: bool = Field(
-        default_factory=lambda: os.getenv("RECALL_PASSWORD_REQUIRE_UPPER", "true").lower()
+        default_factory=lambda: os.getenv(
+            "RECALL_PASSWORD_REQUIRE_UPPER", "true"
+        ).lower()
         == "true"
     )
     password_require_lower: bool = Field(
-        default_factory=lambda: os.getenv("RECALL_PASSWORD_REQUIRE_LOWER", "true").lower()
+        default_factory=lambda: os.getenv(
+            "RECALL_PASSWORD_REQUIRE_LOWER", "true"
+        ).lower()
         == "true"
     )
     password_require_digit: bool = Field(
-        default_factory=lambda: os.getenv("RECALL_PASSWORD_REQUIRE_DIGIT", "true").lower()
+        default_factory=lambda: os.getenv(
+            "RECALL_PASSWORD_REQUIRE_DIGIT", "true"
+        ).lower()
         == "true"
     )
     password_require_symbol: bool = Field(
-        default_factory=lambda: os.getenv("RECALL_PASSWORD_REQUIRE_SYMBOL", "true").lower()
+        default_factory=lambda: os.getenv(
+            "RECALL_PASSWORD_REQUIRE_SYMBOL", "true"
+        ).lower()
         == "true"
     )
     otel_exporter_otlp_endpoint: str = Field(
         default_factory=lambda: os.getenv("RECALL_OTEL_EXPORTER_OTLP_ENDPOINT", "")
     )
     secret_rotation_max_age_days: int = Field(
-        default_factory=lambda: int(os.getenv("RECALL_SECRET_ROTATION_MAX_AGE_DAYS", "30")),
+        default_factory=lambda: int(
+            os.getenv("RECALL_SECRET_ROTATION_MAX_AGE_DAYS", "30")
+        ),
         ge=1,
     )
     jwt_secret_last_rotated_at: str | None = Field(
-        default_factory=lambda: os.getenv("RECALL_JWT_SECRET_LAST_ROTATED_AT", "") or None
+        default_factory=lambda: os.getenv("RECALL_JWT_SECRET_LAST_ROTATED_AT", "")
+        or None
     )
     public_api_keys: str = Field(
         default_factory=lambda: os.getenv("RECALL_PUBLIC_API_KEYS", "")
     )
     device_api_require_certificate: bool = Field(
-        default_factory=lambda: os.getenv("RECALL_DEVICE_API_REQUIRE_CERTIFICATE", "false").lower()
+        default_factory=lambda: os.getenv(
+            "RECALL_DEVICE_API_REQUIRE_CERTIFICATE", "false"
+        ).lower()
         == "true"
     )
     auth_lockout_minutes: int = Field(
