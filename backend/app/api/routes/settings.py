@@ -44,7 +44,9 @@ def _resolve_scope(
     device_id: str | None,
 ) -> tuple[str, int | None, str | None]:
     if scope not in ALLOWED_SCOPES:
-        raise HTTPException(status_code=400, detail=f"Invalid scope. Allowed: {sorted(ALLOWED_SCOPES)}")
+        raise HTTPException(
+            status_code=400, detail=f"Invalid scope. Allowed: {sorted(ALLOWED_SCOPES)}"
+        )
     if scope == SCOPE_ORGANIZATION:
         return scope, user.organization_id, None
     if scope == SCOPE_DEVICE:
@@ -135,7 +137,8 @@ def apply_settings(
 
 
 @router.get(
-    "/history/{key}", dependencies=[Depends(require_role("admin", "operator", "viewer"))]
+    "/history/{key}",
+    dependencies=[Depends(require_role("admin", "operator", "viewer"))],
 )
 def settings_history(
     key: str,

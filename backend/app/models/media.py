@@ -21,7 +21,9 @@ class Media(Base):
     thumbnail_path: Mapped[str | None] = mapped_column(String(1024), nullable=True)
     duration_seconds: Mapped[int | None] = mapped_column(Integer, nullable=True)
     uploaded_at: Mapped[datetime] = mapped_column(DateTime, default=utc_now)
-    workflow_state: Mapped[str] = mapped_column(String(32), default="draft", nullable=False, index=True)
+    workflow_state: Mapped[str] = mapped_column(
+        String(32), default="draft", nullable=False, index=True
+    )
 
 
 class Playlist(Base):
@@ -36,7 +38,9 @@ class PlaylistItem(Base):
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
     playlist_id: Mapped[int] = mapped_column(ForeignKey("playlists.id"), index=True)
-    media_id: Mapped[int | None] = mapped_column(ForeignKey("media.id"), index=True, nullable=True)
+    media_id: Mapped[int | None] = mapped_column(
+        ForeignKey("media.id"), index=True, nullable=True
+    )
     content_type: Mapped[str] = mapped_column(String(32), default="image")
     source_url: Mapped[str | None] = mapped_column(String(1024), nullable=True)
     widget_config: Mapped[str | None] = mapped_column(String(4096), nullable=True)
@@ -56,8 +60,6 @@ class Schedule(Base):
     recurrence: Mapped[str | None] = mapped_column(String(128), nullable=True)
     priority: Mapped[int] = mapped_column(Integer, default=100)
     timezone: Mapped[str] = mapped_column(String(64), default="UTC")
-
-
 
 
 class ScheduleException(Base):
@@ -142,6 +144,8 @@ class ZonePlaylistAssignment(Base):
     __tablename__ = "zone_playlist_assignments"
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
-    zone_id: Mapped[int] = mapped_column(ForeignKey("zones.id"), unique=True, index=True)
+    zone_id: Mapped[int] = mapped_column(
+        ForeignKey("zones.id"), unique=True, index=True
+    )
     playlist_id: Mapped[int] = mapped_column(ForeignKey("playlists.id"), index=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=utc_now)

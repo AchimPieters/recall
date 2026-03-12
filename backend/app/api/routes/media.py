@@ -16,6 +16,22 @@ class WorkflowTransitionPayload(BaseModel):
     state: str = Field(min_length=3, max_length=32)
 
 
+def _enforce_workflow_role(target_state: str, user: AuthUser) -> None:
+    target = target_state.strip().lower()
+    editor_roles = {"editor", "admin", "superadmin"}
+    reviewer_roles = {"reviewer", "admin", "superadmin"}
+
+    if target == "review" and user.role not in editor_roles:
+        raise HTTPException(
+            status_code=403,
+            detail="Only editor/reviewer pipeline roles can move to review",
+        )
+    if target in {"approved", "published"} and user.role not in reviewer_roles:
+        raise HTTPException(
+            status_code=403, detail="Only reviewer/admin roles can approve or publish"
+        )
+
+
 @router.post("/upload", dependencies=[Depends(require_permission("media:write"))])
 async def upload(
     file: UploadFile = File(...),
@@ -92,7 +108,10 @@ def list_media(
     return result
 
 
-@router.post("/{media_id}/workflow/transition", dependencies=[Depends(require_permission("media:write"))])
+@router.post(
+    "/{media_id}/workflow/transition",
+    dependencies=[Depends(require_permission("media:write"))],
+)
 def transition_media_workflow(
     media_id: int,
     payload: WorkflowTransitionPayload,
@@ -100,6 +119,7 @@ def transition_media_workflow(
     user: AuthUser = Depends(get_current_user),
 ):
     service = MediaService(db)
+    _enforce_workflow_role(payload.state, user)
     try:
         media = service.transition_workflow_state(
             media_id,

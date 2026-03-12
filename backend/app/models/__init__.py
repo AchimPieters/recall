@@ -11,9 +11,28 @@ from backend.app.models.device import (
     DeviceCertificate,
 )
 from backend.app.models.event import Event
-from backend.app.models.media import Layout, Media, MediaVersion, Playlist, PlaylistAssignment, PlaylistItem, PlaylistRule, Schedule, ScheduleBlackoutWindow, ScheduleException, Zone, ZonePlaylistAssignment
+from backend.app.models.media import (
+    Layout,
+    Media,
+    MediaVersion,
+    Playlist,
+    PlaylistAssignment,
+    PlaylistItem,
+    PlaylistRule,
+    Schedule,
+    ScheduleBlackoutWindow,
+    ScheduleException,
+    Zone,
+    ZonePlaylistAssignment,
+)
 from backend.app.models.settings import Organization, Setting, SettingVersion, User
-from backend.app.models.security import AuditLog, PasswordResetToken, RefreshToken, SecurityAuditEvent
+from backend.app.models.security import (
+    AuditLog,
+    PasswordResetToken,
+    PublicApiKey,
+    RefreshToken,
+    SecurityAuditEvent,
+)
 
 __all__ = [
     "Alert",
@@ -47,4 +66,5 @@ __all__ = [
     "RefreshToken",
     "PasswordResetToken",
     "SecurityAuditEvent",
+    "PublicApiKey",
 ]

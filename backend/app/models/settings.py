@@ -22,7 +22,9 @@ class Setting(Base):
     key: Mapped[str] = mapped_column(String(255), index=True)
     value: Mapped[str] = mapped_column(String(4096), default="")
     scope: Mapped[str] = mapped_column(String(32), default="global", index=True)
-    organization_id: Mapped[int | None] = mapped_column(Integer, nullable=True, index=True)
+    organization_id: Mapped[int | None] = mapped_column(
+        Integer, nullable=True, index=True
+    )
     device_id: Mapped[str | None] = mapped_column(String(64), nullable=True, index=True)
     version: Mapped[int] = mapped_column(Integer, default=1)
 
@@ -35,7 +37,9 @@ class SettingVersion(Base):
     setting_value: Mapped[str] = mapped_column(String(4096), default="")
     version: Mapped[int] = mapped_column(Integer)
     scope: Mapped[str] = mapped_column(String(32), default="global", index=True)
-    organization_id: Mapped[int | None] = mapped_column(Integer, nullable=True, index=True)
+    organization_id: Mapped[int | None] = mapped_column(
+        Integer, nullable=True, index=True
+    )
     device_id: Mapped[str | None] = mapped_column(String(64), nullable=True, index=True)
     changed_by: Mapped[str] = mapped_column(String(255), default="system")
     change_reason: Mapped[str] = mapped_column(String(255), default="update")
@@ -51,10 +55,14 @@ class User(Base):
     role: Mapped[str] = mapped_column(String(32), default="viewer")
     organization_id: Mapped[int | None] = mapped_column(Integer, nullable=True)
     failed_login_count: Mapped[int] = mapped_column(Integer, default=0)
-    last_failed_login_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    last_failed_login_at: Mapped[datetime | None] = mapped_column(
+        DateTime, nullable=True
+    )
     locked_until: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
     is_active: Mapped[bool] = mapped_column(Boolean, default=True)
-    password_changed_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+    password_changed_at: Mapped[datetime] = mapped_column(
+        DateTime, default=datetime.utcnow
+    )
     mfa_enabled: Mapped[bool] = mapped_column(Boolean, default=False)
     mfa_secret: Mapped[str | None] = mapped_column(String(255), nullable=True)
     mfa_recovery_codes: Mapped[str | None] = mapped_column(String(4096), nullable=True)

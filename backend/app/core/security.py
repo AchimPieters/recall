@@ -21,8 +21,6 @@ def get_password_hash(password: str) -> str:
     return pwd_context.hash(password)
 
 
-
-
 def validate_password_policy(password: str) -> None:
     failures: list[str] = []
     if len(password) < settings.password_min_length:
@@ -103,7 +101,9 @@ def create_mfa_token(subject: str, expires_delta: timedelta | None = None) -> st
 
 
 def parse_mfa_token(token: str) -> str:
-    payload = jwt.decode(token, settings.jwt_secret, algorithms=[settings.jwt_algorithm])
+    payload = jwt.decode(
+        token, settings.jwt_secret, algorithms=[settings.jwt_algorithm]
+    )
     if payload.get("type") != "mfa":
         raise ValueError("Invalid token type")
     subject = payload.get("sub")

@@ -4,6 +4,7 @@ from pathlib import Path
 from typing import Iterable
 
 from sqlalchemy import Engine, text
+from sqlalchemy.engine import Connection
 
 
 MIGRATION_TABLE = "schema_migrations"
@@ -48,33 +49,39 @@ def _split_statements(sql: str) -> Iterable[str]:
             yield statement
 
 
-def apply_sql_migrations(engine: Engine, migrations_path: Path | None = None) -> list[str]:
+def apply_sql_migrations_connection(
+    conn: Connection, migrations_path: Path | None = None
+) -> list[str]:
     applied: list[str] = []
     migration_files = discover_migration_files(migrations_path)
 
-    with engine.begin() as conn:
-        _ensure_migration_table(conn)
-        completed = _applied_versions(conn)
-        for migration_file in migration_files:
-            version = migration_file.name
-            if version in completed:
-                continue
+    _ensure_migration_table(conn)
+    completed = _applied_versions(conn)
+    for migration_file in migration_files:
+        version = migration_file.name
+        if version in completed:
+            continue
 
-            sql = migration_file.read_text(encoding="utf-8").strip()
-            if sql:
-                if engine.dialect.name == "sqlite":
-                    raw_connection = conn.connection
-                    raw_connection.executescript(sql)
-                else:
-                    for statement in _split_statements(sql):
-                        conn.exec_driver_sql(statement)
+        sql = migration_file.read_text(encoding="utf-8").strip()
+        if sql:
+            if conn.engine.dialect.name == "sqlite":
+                raw_connection = conn.connection
+                raw_connection.executescript(sql)
+            else:
+                for statement in _split_statements(sql):
+                    conn.exec_driver_sql(statement)
 
-            conn.execute(
-                text(
-                    f"INSERT INTO {MIGRATION_TABLE} (version) VALUES (:version)"
-                ),
-                {"version": version},
-            )
-            applied.append(version)
+        conn.execute(
+            text(f"INSERT INTO {MIGRATION_TABLE} (version) VALUES (:version)"),
+            {"version": version},
+        )
+        applied.append(version)
 
     return applied
+
+
+def apply_sql_migrations(
+    engine: Engine, migrations_path: Path | None = None
+) -> list[str]:
+    with engine.begin() as conn:
+        return apply_sql_migrations_connection(conn, migrations_path=migrations_path)

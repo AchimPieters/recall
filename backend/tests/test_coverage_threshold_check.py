@@ -17,7 +17,9 @@ SAMPLE_XML = """<?xml version=\"1.0\" ?>
 """
 
 
-def test_coverage_threshold_check_passes_for_satisfied_thresholds(tmp_path: Path, monkeypatch) -> None:
+def test_coverage_threshold_check_passes_for_satisfied_thresholds(
+    tmp_path: Path, monkeypatch
+) -> None:
     xml = tmp_path / "cov.xml"
     xml.write_text(SAMPLE_XML, encoding="utf-8")
 
@@ -40,7 +42,9 @@ def test_coverage_threshold_check_passes_for_satisfied_thresholds(tmp_path: Path
     assert coverage_threshold_check.main() == 0
 
 
-def test_coverage_threshold_check_fails_for_missing_or_low_files(tmp_path: Path, monkeypatch) -> None:
+def test_coverage_threshold_check_fails_for_missing_or_low_files(
+    tmp_path: Path, monkeypatch
+) -> None:
     xml = tmp_path / "cov.xml"
     xml.write_text(SAMPLE_XML, encoding="utf-8")
 

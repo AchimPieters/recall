@@ -79,3 +79,43 @@ def test_transition_rejects_invalid_target_state() -> None:
 
     assert response.status_code == 400
     assert "unsupported workflow state" in response.json()["detail"]
+
+
+def test_editor_reviewer_publish_workflow_roles() -> None:
+    _ensure_user("media-editor", role="editor", organization_id=7)
+    _ensure_user("media-reviewer", role="reviewer", organization_id=7)
+    media_id = _create_media(organization_id=7, workflow_state="draft")
+
+    editor_token = create_access_token(subject="media-editor", role="editor")
+    reviewer_token = create_access_token(subject="media-reviewer", role="reviewer")
+
+    to_review = client.post(
+        f"/api/v1/media/{media_id}/workflow/transition",
+        json={"state": "review"},
+        headers={"Authorization": f"Bearer {editor_token}"},
+    )
+    assert to_review.status_code == 200
+    assert to_review.json()["workflow_state"] == "review"
+
+    publish_as_editor = client.post(
+        f"/api/v1/media/{media_id}/workflow/transition",
+        json={"state": "published"},
+        headers={"Authorization": f"Bearer {editor_token}"},
+    )
+    assert publish_as_editor.status_code == 403
+
+    to_approved = client.post(
+        f"/api/v1/media/{media_id}/workflow/transition",
+        json={"state": "approved"},
+        headers={"Authorization": f"Bearer {reviewer_token}"},
+    )
+    assert to_approved.status_code == 200
+    assert to_approved.json()["workflow_state"] == "approved"
+
+    to_published = client.post(
+        f"/api/v1/media/{media_id}/workflow/transition",
+        json={"state": "published"},
+        headers={"Authorization": f"Bearer {reviewer_token}"},
+    )
+    assert to_published.status_code == 200
+    assert to_published.json()["workflow_state"] == "published"

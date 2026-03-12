@@ -16,11 +16,18 @@ class SettingsRepository:
     ) -> list[Setting]:
         query = self.db.query(Setting).filter(Setting.scope == scope)
         if scope == "global":
-            query = query.filter(Setting.organization_id.is_(None), Setting.device_id.is_(None))
+            query = query.filter(
+                Setting.organization_id.is_(None), Setting.device_id.is_(None)
+            )
         elif scope == "organization":
-            query = query.filter(Setting.organization_id == organization_id, Setting.device_id.is_(None))
+            query = query.filter(
+                Setting.organization_id == organization_id, Setting.device_id.is_(None)
+            )
         else:
-            query = query.filter(Setting.organization_id == organization_id, Setting.device_id == device_id)
+            query = query.filter(
+                Setting.organization_id == organization_id,
+                Setting.device_id == device_id,
+            )
         return query.all()
 
     def get_by_key(
@@ -31,13 +38,22 @@ class SettingsRepository:
         organization_id: int | None = None,
         device_id: str | None = None,
     ) -> Setting | None:
-        query = self.db.query(Setting).filter(Setting.key == key, Setting.scope == scope)
+        query = self.db.query(Setting).filter(
+            Setting.key == key, Setting.scope == scope
+        )
         if scope == "global":
-            query = query.filter(Setting.organization_id.is_(None), Setting.device_id.is_(None))
+            query = query.filter(
+                Setting.organization_id.is_(None), Setting.device_id.is_(None)
+            )
         elif scope == "organization":
-            query = query.filter(Setting.organization_id == organization_id, Setting.device_id.is_(None))
+            query = query.filter(
+                Setting.organization_id == organization_id, Setting.device_id.is_(None)
+            )
         else:
-            query = query.filter(Setting.organization_id == organization_id, Setting.device_id == device_id)
+            query = query.filter(
+                Setting.organization_id == organization_id,
+                Setting.device_id == device_id,
+            )
         return query.first()
 
     def upsert(

@@ -29,8 +29,20 @@ def test_playlist_assignments_and_fallback_resolution() -> None:
     svc.add_item(p1.id, media_id=1, content_type="image")
     svc.add_item(p2.id, media_id=2, content_type="video")
 
-    svc.add_assignment(playlist_id=p2.id, target_type="group", target_id="7", is_fallback=True, priority=200)
-    svc.add_assignment(playlist_id=p1.id, target_type="device", target_id="dev-1", is_fallback=False, priority=10)
+    svc.add_assignment(
+        playlist_id=p2.id,
+        target_type="group",
+        target_id="7",
+        is_fallback=True,
+        priority=200,
+    )
+    svc.add_assignment(
+        playlist_id=p1.id,
+        target_type="device",
+        target_id="dev-1",
+        is_fallback=False,
+        priority=10,
+    )
 
     resolved = svc.resolve_for_device("dev-1")
     assert resolved["playlist_id"] == p1.id
@@ -50,8 +62,12 @@ def test_schedule_has_precedence_over_assignment() -> None:
     svc.add_item(sched_playlist.id, media_id=10, content_type="image")
     svc.add_item(assigned_playlist.id, media_id=11, content_type="image")
 
-    svc.add_assignment(playlist_id=assigned_playlist.id, target_type="device", target_id="dev-2")
-    svc.schedule_playlist(playlist_id=sched_playlist.id, target="dev-2", starts_at=None, ends_at=None)
+    svc.add_assignment(
+        playlist_id=assigned_playlist.id, target_type="device", target_id="dev-2"
+    )
+    svc.schedule_playlist(
+        playlist_id=sched_playlist.id, target="dev-2", starts_at=None, ends_at=None
+    )
 
     resolved = svc.resolve_for_device("dev-2")
     assert resolved["playlist_id"] == sched_playlist.id
@@ -65,8 +81,20 @@ def test_playlist_supports_web_url_and_widget_items() -> None:
     web = svc.create_playlist("Web")
     widget = svc.create_playlist("Widget")
 
-    svc.add_item(web.id, media_id=None, content_type="web_url", source_url="https://example.com", duration_seconds=30)
-    svc.add_item(widget.id, media_id=None, content_type="widget", widget_config='{"type":"clock"}', duration_seconds=15)
+    svc.add_item(
+        web.id,
+        media_id=None,
+        content_type="web_url",
+        source_url="https://example.com",
+        duration_seconds=30,
+    )
+    svc.add_item(
+        widget.id,
+        media_id=None,
+        content_type="widget",
+        widget_config='{"type":"clock"}',
+        duration_seconds=15,
+    )
 
     assert svc.validate_playlist_playable(web.id)
     assert svc.validate_playlist_playable(widget.id)
@@ -78,7 +106,12 @@ def test_web_url_item_rejects_non_http_scheme() -> None:
 
     web = svc.create_playlist("WebInvalid")
     with pytest.raises(ValueError, match=r"absolute http\(s\) URL"):
-        svc.add_item(web.id, media_id=None, content_type="web_url", source_url="javascript:alert(1)")
+        svc.add_item(
+            web.id,
+            media_id=None,
+            content_type="web_url",
+            source_url="javascript:alert(1)",
+        )
 
 
 def test_widget_item_requires_valid_json_object() -> None:
@@ -87,7 +120,11 @@ def test_widget_item_requires_valid_json_object() -> None:
 
     widget = svc.create_playlist("WidgetInvalid")
     with pytest.raises(ValueError, match="valid JSON"):
-        svc.add_item(widget.id, media_id=None, content_type="widget", widget_config="not-json")
+        svc.add_item(
+            widget.id, media_id=None, content_type="widget", widget_config="not-json"
+        )
 
     with pytest.raises(ValueError, match="JSON object"):
-        svc.add_item(widget.id, media_id=None, content_type="widget", widget_config='[1,2,3]')
+        svc.add_item(
+            widget.id, media_id=None, content_type="widget", widget_config="[1,2,3]"
+        )

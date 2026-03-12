@@ -7,7 +7,9 @@ client = TestClient(app)
 
 
 def test_rejects_invalid_host_header(monkeypatch) -> None:
-    monkeypatch.setattr(main_module.settings_conf, "allowed_hosts", ["localhost", "testserver"])
+    monkeypatch.setattr(
+        main_module.settings_conf, "allowed_hosts", ["localhost", "testserver"]
+    )
 
     response = client.get("/api/v1/health", headers={"Host": "evil.example.com"})
 
@@ -36,4 +38,7 @@ def test_sets_hsts_when_https_enforced_and_forwarded_proto_trusted(monkeypatch) 
     response = client.get("/api/v1/health", headers={"X-Forwarded-Proto": "https"})
 
     assert response.status_code == 200
-    assert response.headers["Strict-Transport-Security"] == "max-age=31536000; includeSubDomains"
+    assert (
+        response.headers["Strict-Transport-Security"]
+        == "max-age=31536000; includeSubDomains"
+    )

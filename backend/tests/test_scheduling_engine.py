@@ -26,8 +26,20 @@ def test_schedule_priority_resolution() -> None:
 
     now = datetime.now(timezone.utc)
 
-    svc.schedule_playlist(low.id, target="dev-x", starts_at=now - timedelta(minutes=5), ends_at=now + timedelta(minutes=5), priority=10)
-    svc.schedule_playlist(high.id, target="dev-x", starts_at=now - timedelta(minutes=5), ends_at=now + timedelta(minutes=5), priority=500)
+    svc.schedule_playlist(
+        low.id,
+        target="dev-x",
+        starts_at=now - timedelta(minutes=5),
+        ends_at=now + timedelta(minutes=5),
+        priority=10,
+    )
+    svc.schedule_playlist(
+        high.id,
+        target="dev-x",
+        starts_at=now - timedelta(minutes=5),
+        ends_at=now + timedelta(minutes=5),
+        priority=500,
+    )
 
     resolved = svc.resolve_active_playlist_id_at("dev-x", now)
     assert resolved == high.id

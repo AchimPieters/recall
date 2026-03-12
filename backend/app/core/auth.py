@@ -59,6 +59,15 @@ ROLE_PERMISSIONS: dict[str, set[str]] = {
         "monitor.read",
         "monitor.write",
     },
+    "editor": {
+        "media.read",
+        "media.upload",
+    },
+    "reviewer": {
+        "media.read",
+        "media.upload",
+        "playlists.read",
+    },
     "viewer": {
         "devices.read",
         "media.read",
@@ -94,7 +103,9 @@ def normalize_permission(permission: str) -> str:
 
 def role_has_permission(role: str, permission: str) -> bool:
     normalized = normalize_permission(permission)
-    normalized_perms = {normalize_permission(p) for p in ROLE_PERMISSIONS.get(role, set())}
+    normalized_perms = {
+        normalize_permission(p) for p in ROLE_PERMISSIONS.get(role, set())
+    }
 
     if normalized in normalized_perms:
         return True

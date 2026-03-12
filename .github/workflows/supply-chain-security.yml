@@ -48,7 +48,7 @@ jobs:
         env:
           COSIGN_YES: 'true'
         run: |
-          cosign sign-blob sbom.cdx.json --output-signature sbom.cdx.json.sig --output-certificate sbom.cdx.json.pem
+          cosign sign-blob sbom.cdx.json --bundle sbom.cdx.bundle.json --output-signature sbom.cdx.json.sig --output-certificate sbom.cdx.json.pem
 
       - name: Upload supply chain artifacts
         uses: actions/upload-artifact@v4
@@ -58,3 +58,4 @@ jobs:
             sbom.cdx.json
             sbom.cdx.json.sig
             sbom.cdx.json.pem
+            sbom.cdx.bundle.json

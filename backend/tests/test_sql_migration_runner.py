@@ -33,7 +33,9 @@ def test_apply_sql_migrations_orders_and_is_idempotent(tmp_path: Path) -> None:
 
     with engine.begin() as conn:
         count = conn.execute(text("SELECT COUNT(*) FROM widgets")).scalar_one()
-        applied = conn.execute(text("SELECT COUNT(*) FROM schema_migrations")).scalar_one()
+        applied = conn.execute(
+            text("SELECT COUNT(*) FROM schema_migrations")
+        ).scalar_one()
 
     assert count == 1
     assert applied == 2

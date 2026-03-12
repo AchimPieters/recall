@@ -17,7 +17,9 @@ def test_device_command_fetch_ack_and_playback_status() -> None:
     svc = DeviceService(db)
     svc.register("dev-1", "Device 1", "127.0.0.1", "1.0.0", organization_id=None)
 
-    cmd = svc.enqueue_command(device_id="dev-1", command_type="reboot", payload={"delay": 0})
+    cmd = svc.enqueue_command(
+        device_id="dev-1", command_type="reboot", payload={"delay": 0}
+    )
     pending = svc.fetch_commands("dev-1")
     assert len(pending) == 1
     assert pending[0]["command_id"] == cmd["command_id"]

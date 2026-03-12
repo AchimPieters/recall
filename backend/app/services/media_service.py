@@ -41,6 +41,7 @@ WORKFLOW_TRANSITIONS = {
     "archived": set(),
 }
 
+
 class StorageBackend(Protocol):
     def write_bytes(self, relative_name: str, data: bytes) -> Path: ...
 
@@ -68,7 +69,9 @@ class MediaService:
         self.media_dir = Path(settings.media_dir)
         self.storage: StorageBackend = LocalStorageBackend(self.media_dir)
 
-    def validate_upload(self, filename: str, size: int, mime_type: str, data: bytes | None = None) -> None:
+    def validate_upload(
+        self, filename: str, size: int, mime_type: str, data: bytes | None = None
+    ) -> None:
         if size > settings.max_upload_bytes:
             raise ValueError("Upload too large")
         if mime_type not in ALLOWED_MIME_TYPES:
@@ -83,7 +86,6 @@ class MediaService:
             raise ValueError("File extension does not match MIME type")
         if data is not None:
             self._validate_file_structure(mime_type, data)
-
 
     def _validate_file_structure(self, mime_type: str, data: bytes) -> None:
         if mime_type.startswith("image/"):
@@ -107,8 +109,12 @@ class MediaService:
     def _checksum(self, data: bytes) -> str:
         return hashlib.sha256(data).hexdigest()
 
-    def _find_duplicate(self, checksum: str, organization_id: int | None) -> Media | None:
-        query = self.db.query(Media).join(MediaVersion, MediaVersion.media_id == Media.id)
+    def _find_duplicate(
+        self, checksum: str, organization_id: int | None
+    ) -> Media | None:
+        query = self.db.query(Media).join(
+            MediaVersion, MediaVersion.media_id == Media.id
+        )
         if organization_id is not None:
             query = query.filter(Media.organization_id == organization_id)
         else:
@@ -134,7 +140,12 @@ class MediaService:
             with Image.open(path) as img2:
                 width, height = img2.size
                 codec = (img2.format or "").lower() or None
-            return {"width": width, "height": height, "codec": codec, "duration_seconds": None}
+            return {
+                "width": width,
+                "height": height,
+                "codec": codec,
+                "duration_seconds": None,
+            }
         except (UnidentifiedImageError, OSError) as exc:
             raise ValueError(f"Corrupt image upload: {exc}") from exc
 
@@ -157,10 +168,20 @@ class MediaService:
                 timeout=settings.ffprobe_timeout_seconds,
             )  # nosec B603
         except (OSError, subprocess.SubprocessError):
-            return {"width": None, "height": None, "codec": None, "duration_seconds": None}
+            return {
+                "width": None,
+                "height": None,
+                "codec": None,
+                "duration_seconds": None,
+            }
 
         if proc.returncode != 0:
-            return {"width": None, "height": None, "codec": None, "duration_seconds": None}
+            return {
+                "width": None,
+                "height": None,
+                "codec": None,
+                "duration_seconds": None,
+            }
 
         parsed: dict[str, str] = {}
         for line in proc.stdout.splitlines():
@@ -170,7 +191,11 @@ class MediaService:
             parsed[key.strip()] = value.strip()
 
         try:
-            duration = int(float(parsed.get("duration", "0"))) if parsed.get("duration") else None
+            duration = (
+                int(float(parsed.get("duration", "0")))
+                if parsed.get("duration")
+                else None
+            )
         except ValueError:
             duration = None
 
@@ -212,13 +237,20 @@ class MediaService:
         elif mime_type.startswith("video/"):
             meta = self._inspect_video(path)
         else:
-            meta = {"width": None, "height": None, "codec": None, "duration_seconds": None}
+            meta = {
+                "width": None,
+                "height": None,
+                "codec": None,
+                "duration_seconds": None,
+            }
 
         thumb = self._thumbnail(path, mime_type)
 
         media = (
             self.db.query(Media)
-            .filter(Media.organization_id == organization_id, Media.name == original_name)
+            .filter(
+                Media.organization_id == organization_id, Media.name == original_name
+            )
             .first()
         )
         if media:
@@ -255,7 +287,16 @@ class MediaService:
         )
         self.db.commit()
         self.db.refresh(media)
-        publisher.publish(make_event(MEDIA_UPLOADED, {"media_id": media.id, "name": media.name, "organization_id": organization_id}))
+        publisher.publish(
+            make_event(
+                MEDIA_UPLOADED,
+                {
+                    "media_id": media.id,
+                    "name": media.name,
+                    "organization_id": organization_id,
+                },
+            )
+        )
         return media
 
     def latest_version(self, media_id: int) -> MediaVersion | None:
@@ -270,9 +311,9 @@ class MediaService:
         query = self.db.query(Media)
         if organization_id is not None:
             query = query.filter(Media.organization_id == organization_id)
-        return query.order_by(Media.uploaded_at.desc(), Media.id.desc()).limit(500).all()
-
-
+        return (
+            query.order_by(Media.uploaded_at.desc(), Media.id.desc()).limit(500).all()
+        )
 
     def transition_workflow_state(
         self,

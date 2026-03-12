@@ -30,7 +30,9 @@ def refresh_device_statuses_task() -> int:
 
 
 def evaluate_secret_rotation() -> dict:
-    return SecretRotationService().evaluate(last_rotated_at=settings.jwt_secret_last_rotated_at)
+    return SecretRotationService().evaluate(
+        last_rotated_at=settings.jwt_secret_last_rotated_at
+    )
 
 
 @celery_app.task(name="recall.workers.evaluate_secret_rotation", base=RetryableTask)

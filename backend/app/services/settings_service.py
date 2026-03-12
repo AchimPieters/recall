@@ -35,7 +35,9 @@ class SettingsService:
     ) -> None:
         if scope not in ALLOWED_SCOPES:
             raise ValueError(f"Unsupported settings scope: {scope}")
-        if scope == SCOPE_GLOBAL and (organization_id is not None or device_id is not None):
+        if scope == SCOPE_GLOBAL and (
+            organization_id is not None or device_id is not None
+        ):
             raise ValueError("Global settings cannot target organization or device")
         if scope == SCOPE_ORGANIZATION:
             if organization_id is None:
@@ -53,7 +55,9 @@ class SettingsService:
         if "heartbeat_interval" in payload:
             value = int(payload["heartbeat_interval"])
             if value < 5 or value > 3600:
-                raise ValueError("heartbeat_interval must be between 5 and 3600 seconds")
+                raise ValueError(
+                    "heartbeat_interval must be between 5 and 3600 seconds"
+                )
 
         if "display_brightness" in payload:
             value = int(payload["display_brightness"])

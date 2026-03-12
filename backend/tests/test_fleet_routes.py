@@ -9,16 +9,24 @@ from backend.app.services.device_service import DeviceService
 client = TestClient(app)
 
 
-def _ensure_user(username: str, password: str, role: str = "admin") -> None:
+def _ensure_user(
+    username: str,
+    password: str,
+    role: str = "admin",
+    organization_id: int | None = None,
+) -> None:
     Base.metadata.create_all(bind=engine)
     db = SessionLocal()
     try:
         user = db.query(User).filter(User.username == username).first()
         if not user:
-            user = User(username=username, password_hash=get_password_hash(password), role=role)
+            user = User(
+                username=username, password_hash=get_password_hash(password), role=role
+            )
             db.add(user)
         user.password_hash = get_password_hash(password)
         user.role = role
+        user.organization_id = organization_id
         user.is_active = True
         db.commit()
     finally:
@@ -61,7 +69,9 @@ def test_list_devices_accepts_zulu_timestamp() -> None:
 
     db = SessionLocal()
     try:
-        DeviceService(db).register("fleet-dev-1", "Fleet Device", None, "1.0.0", organization_id=None)
+        DeviceService(db).register(
+            "fleet-dev-1", "Fleet Device", None, "1.0.0", organization_id=None
+        )
     finally:
         db.close()
 
@@ -113,7 +123,9 @@ def test_export_devices_csv_returns_csv_payload() -> None:
 
     db = SessionLocal()
     try:
-        DeviceService(db).register("csv-dev-1", "CSV Device", None, "1.0.0", organization_id=None)
+        DeviceService(db).register(
+            "csv-dev-1", "CSV Device", None, "1.0.0", organization_id=None
+        )
     finally:
         db.close()
 
@@ -124,7 +136,41 @@ def test_export_devices_csv_returns_csv_payload() -> None:
 
     assert response.status_code == 200
     assert response.headers["content-type"].startswith("text/csv")
-    assert "attachment; filename=\"devices.csv\"" == response.headers["content-disposition"]
+    assert (
+        'attachment; filename="devices.csv"' == response.headers["content-disposition"]
+    )
     lines = response.text.splitlines()
     assert lines[0] == "id,name,status,version,last_seen,organization_id"
     assert any(line.startswith("csv-dev-1,CSV Device,") for line in lines[1:])
+
+
+def test_device_list_and_csv_are_tenant_scoped() -> None:
+    _ensure_user("fleet-org-admin", "AdminPass1!", role="admin", organization_id=101)
+
+    db = SessionLocal()
+    try:
+        svc = DeviceService(db)
+        svc.register("org101-dev", "Org101 Device", None, "1.0.0", organization_id=101)
+        svc.register("org202-dev", "Org202 Device", None, "1.0.0", organization_id=202)
+    finally:
+        db.close()
+
+    list_response = client.get(
+        "/api/v1/device/list",
+        headers=_auth_headers("fleet-org-admin"),
+    )
+
+    assert list_response.status_code == 200
+    listed_ids = {row["id"] for row in list_response.json()}
+    assert "org101-dev" in listed_ids
+    assert "org202-dev" not in listed_ids
+
+    csv_response = client.get(
+        "/api/v1/device/export.csv",
+        headers=_auth_headers("fleet-org-admin"),
+    )
+
+    assert csv_response.status_code == 200
+    lines = csv_response.text.splitlines()
+    assert any(line.startswith("org101-dev,Org101 Device,") for line in lines[1:])
+    assert not any(line.startswith("org202-dev,Org202 Device,") for line in lines[1:])

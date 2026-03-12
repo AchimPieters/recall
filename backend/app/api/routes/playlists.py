@@ -46,8 +46,6 @@ class SchedulePayload(BaseModel):
     timezone: str = Field(default="UTC", min_length=1, max_length=64)
 
 
-
-
 class ScheduleExceptionPayload(BaseModel):
     starts_at: datetime
     ends_at: datetime
@@ -154,9 +152,13 @@ def assign_playlist(
     "/{playlist_id}/rules",
     dependencies=[Depends(require_permission("playlists:write"))],
 )
-def add_rule(playlist_id: int, payload: PlaylistRulePayload, db: Session = Depends(get_db)):
+def add_rule(
+    playlist_id: int, payload: PlaylistRulePayload, db: Session = Depends(get_db)
+):
     rule = PlaylistService(db).add_rule(
-        playlist_id=playlist_id, rule_type=payload.rule_type, rule_value=payload.rule_value
+        playlist_id=playlist_id,
+        rule_type=payload.rule_type,
+        rule_value=payload.rule_value,
     )
     return {
         "id": rule.id,
@@ -221,10 +223,6 @@ def schedule_playlist(
     }
 
 
-
-
-
-
 @router.post(
     "/schedules/{schedule_id}/exceptions",
     dependencies=[Depends(require_permission("playlists:write"))],
@@ -275,19 +273,28 @@ def add_blackout_window(payload: BlackoutWindowPayload, db: Session = Depends(ge
     }
 
 
-@router.post("/resolve/at", dependencies=[Depends(require_permission("playlists:read"))])
+@router.post(
+    "/resolve/at", dependencies=[Depends(require_permission("playlists:read"))]
+)
 def resolve_at(target: str, at: datetime, db: Session = Depends(get_db)):
     playlist_id = PlaylistService(db).resolve_active_playlist_id_at(target, at)
     return {"target": target, "at": at, "playlist_id": playlist_id}
 
 
-@router.get("/resolve/preview", dependencies=[Depends(require_permission("playlists:read"))])
-def preview_resolution(target: str, at: datetime | None = None, db: Session = Depends(get_db)):
+@router.get(
+    "/resolve/preview", dependencies=[Depends(require_permission("playlists:read"))]
+)
+def preview_resolution(
+    target: str, at: datetime | None = None, db: Session = Depends(get_db)
+):
     playlist_id = PlaylistService(db).resolve_active_playlist_id_at(target, at)
     return {"target": target, "at": at, "playlist_id": playlist_id}
 
 
-@router.get("/resolve/device/{device_id}", dependencies=[Depends(require_permission("playlists:read"))])
+@router.get(
+    "/resolve/device/{device_id}",
+    dependencies=[Depends(require_permission("playlists:read"))],
+)
 def resolve_for_device(device_id: str, db: Session = Depends(get_db)):
     return PlaylistService(db).resolve_for_device(device_id)
 
@@ -302,9 +309,10 @@ def create_layout(payload: LayoutPayload, db: Session = Depends(get_db)):
     }
 
 
-
-
-@router.post("/layouts/{layout_id}/zones", dependencies=[Depends(require_permission("playlists:write"))])
+@router.post(
+    "/layouts/{layout_id}/zones",
+    dependencies=[Depends(require_permission("playlists:write"))],
+)
 def add_zone(layout_id: int, payload: ZonePayload, db: Session = Depends(get_db)):
     zone = PlaylistService(db).add_zone(
         layout_id=layout_id,
@@ -325,13 +333,27 @@ def add_zone(layout_id: int, payload: ZonePayload, db: Session = Depends(get_db)
     }
 
 
-@router.post("/zones/{zone_id}/playlist", dependencies=[Depends(require_permission("playlists:write"))])
-def assign_zone_playlist(zone_id: int, payload: ZonePlaylistPayload, db: Session = Depends(get_db)):
-    assignment = PlaylistService(db).assign_zone_playlist(zone_id=zone_id, playlist_id=payload.playlist_id)
-    return {"id": assignment.id, "zone_id": assignment.zone_id, "playlist_id": assignment.playlist_id}
+@router.post(
+    "/zones/{zone_id}/playlist",
+    dependencies=[Depends(require_permission("playlists:write"))],
+)
+def assign_zone_playlist(
+    zone_id: int, payload: ZonePlaylistPayload, db: Session = Depends(get_db)
+):
+    assignment = PlaylistService(db).assign_zone_playlist(
+        zone_id=zone_id, playlist_id=payload.playlist_id
+    )
+    return {
+        "id": assignment.id,
+        "zone_id": assignment.zone_id,
+        "playlist_id": assignment.playlist_id,
+    }
 
 
-@router.get("/layouts/{layout_id}/preview", dependencies=[Depends(require_permission("playlists:read"))])
+@router.get(
+    "/layouts/{layout_id}/preview",
+    dependencies=[Depends(require_permission("playlists:read"))],
+)
 def layout_preview(layout_id: int, db: Session = Depends(get_db)):
     preview = PlaylistService(db).get_layout_preview(layout_id)
     if preview["layout"] is None:

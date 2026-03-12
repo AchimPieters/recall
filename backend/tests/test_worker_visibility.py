@@ -15,7 +15,9 @@ def _ensure_user(username: str, password: str, role: str = "admin") -> None:
     try:
         user = db.query(User).filter(User.username == username).first()
         if not user:
-            user = User(username=username, password_hash=get_password_hash(password), role=role)
+            user = User(
+                username=username, password_hash=get_password_hash(password), role=role
+            )
             db.add(user)
         user.password_hash = get_password_hash(password)
         user.role = role
@@ -54,7 +56,9 @@ class _InspectFail:
 
 
 def test_worker_snapshot_reports_counts(monkeypatch) -> None:
-    monkeypatch.setattr(celery_module.celery_app.control, "inspect", lambda timeout=1.0: _InspectOK())
+    monkeypatch.setattr(
+        celery_module.celery_app.control, "inspect", lambda timeout=1.0: _InspectOK()
+    )
 
     snapshot = celery_module.get_worker_snapshot()
     assert snapshot["available"] is True
@@ -63,7 +67,9 @@ def test_worker_snapshot_reports_counts(monkeypatch) -> None:
 
 
 def test_worker_snapshot_handles_inspect_failure(monkeypatch) -> None:
-    monkeypatch.setattr(celery_module.celery_app.control, "inspect", lambda timeout=1.0: _InspectFail())
+    monkeypatch.setattr(
+        celery_module.celery_app.control, "inspect", lambda timeout=1.0: _InspectFail()
+    )
 
     snapshot = celery_module.get_worker_snapshot()
     assert snapshot["available"] is False
@@ -72,7 +78,9 @@ def test_worker_snapshot_handles_inspect_failure(monkeypatch) -> None:
 
 def test_workers_status_route_requires_auth_and_returns_snapshot(monkeypatch) -> None:
     _ensure_user("worker-admin", "AdminPass1!", role="admin")
-    monkeypatch.setattr(celery_module.celery_app.control, "inspect", lambda timeout=1.0: _InspectOK())
+    monkeypatch.setattr(
+        celery_module.celery_app.control, "inspect", lambda timeout=1.0: _InspectOK()
+    )
 
     token = create_access_token(subject="worker-admin", role="admin")
     response = client.get(

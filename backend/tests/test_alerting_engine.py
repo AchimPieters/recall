@@ -24,7 +24,9 @@ def _ensure_user(username: str, password: str, role: str = "admin") -> None:
     try:
         user = db.query(User).filter(User.username == username).first()
         if not user:
-            user = User(username=username, password_hash=get_password_hash(password), role=role)
+            user = User(
+                username=username, password_hash=get_password_hash(password), role=role
+            )
             db.add(user)
         user.password_hash = get_password_hash(password)
         user.role = role
@@ -35,14 +37,18 @@ def _ensure_user(username: str, password: str, role: str = "admin") -> None:
 
 
 def _auth(username: str, role: str = "admin") -> dict[str, str]:
-    return {"Authorization": f"Bearer {create_access_token(subject=username, role=role)}"}
+    return {
+        "Authorization": f"Bearer {create_access_token(subject=username, role=role)}"
+    }
 
 
 def test_alert_level_and_status_validation_in_service() -> None:
     db = _db_session()
     svc = DeviceService(db)
 
-    alert = svc.create_alert("Warning", "system", "disk usage high", organization_id=None)
+    alert = svc.create_alert(
+        "Warning", "system", "disk usage high", organization_id=None
+    )
     assert alert.level == "warning"
 
     try:
@@ -74,7 +80,9 @@ def test_alert_ack_and_resolve_route_flow() -> None:
     assert ack.status_code == 200
     assert ack.json()["status"] == "acknowledged"
 
-    resolved = client.post(f"/api/v1/monitor/alerts/{alert_id}/resolve", headers=headers)
+    resolved = client.post(
+        f"/api/v1/monitor/alerts/{alert_id}/resolve", headers=headers
+    )
     assert resolved.status_code == 200
     assert resolved.json()["status"] == "resolved"
 
@@ -91,6 +99,8 @@ def test_alert_routes_reject_invalid_inputs() -> None:
     assert bad_level.status_code == 400
     assert "unsupported alert level" in bad_level.json()["detail"]
 
-    bad_status = client.get("/api/v1/monitor/alerts", params={"status": "broken"}, headers=headers)
+    bad_status = client.get(
+        "/api/v1/monitor/alerts", params={"status": "broken"}, headers=headers
+    )
     assert bad_status.status_code == 400
     assert "unsupported alert status" in bad_status.json()["detail"]

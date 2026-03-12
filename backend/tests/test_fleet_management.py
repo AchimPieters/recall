@@ -128,12 +128,16 @@ def test_device_config_includes_active_media_path_and_checksum() -> None:
 
     svc.register("cfg-1", "Config Device", None, "1.0.0", organization_id=1)
 
-    media = Media(organization_id=1, name="Poster", path="media/poster.png", mime_type="image/png")
+    media = Media(
+        organization_id=1, name="Poster", path="media/poster.png", mime_type="image/png"
+    )
     db.add(media)
     db.commit()
     db.refresh(media)
 
-    version = MediaVersion(media_id=media.id, version=1, path="media/poster-v1.png", checksum="abc123")
+    version = MediaVersion(
+        media_id=media.id, version=1, path="media/poster-v1.png", checksum="abc123"
+    )
     db.add(version)
 
     playlist = Playlist(name="Device Playlist")
@@ -141,10 +145,16 @@ def test_device_config_includes_active_media_path_and_checksum() -> None:
     db.commit()
     db.refresh(playlist)
 
-    db.add(PlaylistItem(playlist_id=playlist.id, media_id=media.id, content_type="image", position=0))
+    db.add(
+        PlaylistItem(
+            playlist_id=playlist.id, media_id=media.id, content_type="image", position=0
+        )
+    )
     db.commit()
 
-    PlaylistService(db).add_assignment(playlist_id=playlist.id, target_type="device", target_id="cfg-1")
+    PlaylistService(db).add_assignment(
+        playlist_id=playlist.id, target_type="device", target_id="cfg-1"
+    )
 
     config = svc.get_config("cfg-1")
     assert config["active_playlist_id"] == playlist.id

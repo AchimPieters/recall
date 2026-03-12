@@ -3,7 +3,11 @@ from pathlib import Path
 
 import pytest
 
-from backend.app.db.backup_restore import BackupRestoreError, backup_database, restore_database
+from backend.app.db.backup_restore import (
+    BackupRestoreError,
+    backup_database,
+    restore_database,
+)
 
 
 def test_backup_database_creates_backup_and_manifest(tmp_path: Path) -> None:
@@ -42,4 +46,6 @@ def test_backup_restore_rejects_non_sqlite_urls(tmp_path: Path) -> None:
         backup_database("postgresql://recall:pass@localhost/recall", str(tmp_path))
 
     with pytest.raises(BackupRestoreError):
-        restore_database("postgresql://recall:pass@localhost/recall", str(tmp_path / "b.sql"))
+        restore_database(
+            "postgresql://recall:pass@localhost/recall", str(tmp_path / "b.sql")
+        )
