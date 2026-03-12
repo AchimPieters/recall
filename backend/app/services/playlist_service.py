@@ -388,7 +388,7 @@ class PlaylistService:
             return []
 
         # Pick most recently created layout as active baseline.
-        layout = sorted(layouts, key=lambda l: l.id, reverse=True)[0]
+        layout = sorted(layouts, key=lambda layout_item: layout_item.id, reverse=True)[0]
         preview = self.get_layout_preview(layout.id)
         zones: list[dict] = []
         fallback = self.resolve_for_device(device_id).get("playlist_id")
