@@ -96,6 +96,13 @@ spec:
                 - /bin/sh
                 - -c
                 - >-
-                  echo "Run monthly restore drill using latest approved dump";
-                  echo "Hook this job into your internal restore validation pipeline.";
-                  exit 0
+                  LATEST_DUMP=$(ls -1t /backup/db/recall-*.dump | head -n 1) &&
+                  test -n "$LATEST_DUMP" &&
+                  pg_restore --clean --if-exists -d "$TARGET_DATABASE_URL" "$LATEST_DUMP" &&
+                  echo "Restore drill completed from ${LATEST_DUMP}";
+              env:
+                - name: TARGET_DATABASE_URL
+                  valueFrom:
+                    secretKeyRef:
+                      name: recall-staging-secrets
+                      key: DATABASE_URL

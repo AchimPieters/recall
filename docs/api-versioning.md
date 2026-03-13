@@ -14,3 +14,7 @@
 ## Deprecation Rule
 - Deprecate endpoints with a published timeline.
 - Maintain old major versions only for the defined support window.
+
+## Verification
+- Policy test: `cd backend && pytest -q tests/test_api_versioning_policy.py`
+- Canonical router mounts are enforced in `backend/app/api/main.py` (`/api/v1` and `/api/public/v1`).

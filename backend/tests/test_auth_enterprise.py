@@ -532,3 +532,60 @@ def test_mfa_setup_lockout_does_not_lock_verify_flow(monkeypatch) -> None:
     assert failed_enable.status_code == 401
     assert locked_enable.status_code == 429
     assert verify.status_code == 200
+
+
+def test_refresh_token_blocked_for_admin_without_mfa() -> None:
+    _ensure_user("refresh-mfa-admin", "AdminPass1!", role="admin")
+
+    # Seed a refresh token directly to simulate pre-existing token during policy hardening.
+    db = SessionLocal()
+    try:
+        user = db.query(User).filter(User.username == "refresh-mfa-admin").first()
+        assert user is not None
+        user.mfa_enabled = False
+        user.mfa_secret = None
+        db.commit()
+    finally:
+        db.close()
+
+    from backend.app.core.security import create_refresh_token, hash_token
+
+    refresh, jti = create_refresh_token(subject="refresh-mfa-admin")
+    db = SessionLocal()
+    try:
+        SecurityRepository(db).create_refresh_token(
+            "refresh-mfa-admin",
+            hash_token(jti),
+            auth_routes.datetime.now(auth_routes.timezone.utc)
+            + auth_routes.timedelta(minutes=30),
+        )
+        db.commit()
+    finally:
+        db.close()
+
+    response = client.post("/api/v1/token/refresh", json={"refresh_token": refresh})
+    assert response.status_code == 403
+    assert response.json()["detail"] == "MFA required for admin account"
+
+
+def test_refresh_token_blocked_for_inactive_user() -> None:
+    _ensure_user("refresh-inactive-user", "UserPass1!", role="viewer", active=False)
+
+    from backend.app.core.security import create_refresh_token, hash_token
+
+    refresh, jti = create_refresh_token(subject="refresh-inactive-user")
+    db = SessionLocal()
+    try:
+        SecurityRepository(db).create_refresh_token(
+            "refresh-inactive-user",
+            hash_token(jti),
+            auth_routes.datetime.now(auth_routes.timezone.utc)
+            + auth_routes.timedelta(minutes=30),
+        )
+        db.commit()
+    finally:
+        db.close()
+
+    response = client.post("/api/v1/token/refresh", json={"refresh_token": refresh})
+    assert response.status_code == 403
+    assert response.json()["detail"] == "Account inactive"

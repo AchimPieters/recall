@@ -164,6 +164,15 @@ def get_settings() -> Settings:
             settings.jwt_secret = "dev-insecure-secret-change-me"
         else:
             raise ValueError("JWT_SECRET must be set outside development")
-    if settings.environment != "dev" and settings.clamav_fail_open:
-        raise ValueError("RECALL_CLAMAV_FAIL_OPEN must be false outside development")
+
+    if settings.environment != "dev":
+        if not settings.jwt_secrets:
+            raise ValueError(
+                "JWT_SECRETS must be set outside development (Kubernetes secret key-ring)"
+            )
+        if settings.jwt_secret == "dev-insecure-secret-change-me":
+            raise ValueError("Insecure development JWT secret is not allowed outside development")
+        if settings.clamav_fail_open:
+            raise ValueError("RECALL_CLAMAV_FAIL_OPEN must be false outside development")
+
     return settings

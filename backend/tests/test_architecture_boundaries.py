@@ -11,10 +11,7 @@ def _py_files(root: Path) -> list[Path]:
 
 
 def test_routes_do_not_query_database_directly() -> None:
-    allowed_legacy = {
-        Path("backend/app/api/routes/auth.py"),
-        Path("backend/app/api/routes/platform.py"),
-    }
+    allowed_legacy = set()
     violations: list[str] = []
     for path in _py_files(ROUTES_DIR):
         content = path.read_text(encoding="utf-8")
@@ -76,3 +73,18 @@ def test_application_code_does_not_use_create_all_runtime_schema_calls() -> None
                 str(path.relative_to(Path(__file__).resolve().parents[2]))
             )
     assert not violations, "Runtime schema mutation found in: " + ", ".join(violations)
+
+
+def test_routes_do_not_import_repositories_directly() -> None:
+    allowed_legacy = set()
+    violations: list[str] = []
+    for path in _py_files(ROUTES_DIR):
+        content = path.read_text(encoding="utf-8")
+        banned_tokens = (
+            "from backend.app.repositories",
+            "import backend.app.repositories",
+        )
+        for banned in banned_tokens:
+            if banned in content and path not in allowed_legacy:
+                violations.append(f"{path}: contains '{banned}'")
+    assert not violations, "\n".join(violations)

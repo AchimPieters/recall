@@ -21,3 +21,11 @@
 ## Rotation scheduler
 - Worker task `recall.workers.evaluate_secret_rotation` evaluates if rotation is due.
 - Result payload includes `rotation_due`, `max_age_days`, and `last_rotated_at`.
+
+## Runtime enforcement
+- Outside development (`RECALL_ENV != dev`) the backend now **requires** `JWT_SECRETS` (key-ring from Kubernetes Secret).
+- The first value in `JWT_SECRETS` is used as active signing key; remaining keys are accepted for verification during rotation windows.
+- `RECALL_CLAMAV_FAIL_OPEN=true` is rejected outside development.
+
+## Verification
+- `cd backend && pytest -q tests/test_secret_management_policy.py`

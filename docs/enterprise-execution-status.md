@@ -213,3 +213,50 @@ Update deze iteratie: content workflow verder geprofessionaliseerd met persisten
 Update deze iteratie: public API contract verhard met expliciete rate-limit headers (`X-RateLimit-*`, `X-Public-Tenant`) op success- en 429-responses, inclusief regressietests en documentatie. Dit versterkt stap 23 (developer-grade public API) met beter machineleesbaar client-contract.
 
 Update deze iteratie: architectuurlaag aangescherpt door analytics-querylogica te verplaatsen van route naar `AnalyticsService` (summary + timeseries), met aanvullende servicetest voor tenant-scoping. Dit verstevigt fase 1/4 architectuur-consistentie (`route -> service`).
+
+Update deze iteratie: operationele install/update/uninstall scripts zijn verder geharmoniseerd op de enterprise-layout met `recall-agent` systemd unit (runtime vanuit `agent/agent.py`) en cleanup van zowel nieuwe als legacy service-units tijdens uninstall. Dit verkleint operationele drift tussen repository-structuur en host-runtime (stap 1/9/15).
+
+Update deze iteratie: architectuurtests uitgebreid met een expliciete boundary-regel dat routes geen directe repository-imports mogen gebruiken (met tijdelijke legacy-uitzonderingen voor auth/security), zodat laaggrenzen scherper regressiebestendig zijn richting stap 17.
+
+Update deze iteratie: `security` API-routes verplaatst van directe repository-imports naar `SecurityService`, waardoor de nieuwe route→service boundary-test zonder uitzondering voor `security.py` kan gelden; alleen `auth.py` blijft tijdelijk legacy.
+
+Update deze iteratie: `platform` routes (`/ready`, `/observability/summary`) refactored naar `PlatformService` zodat route-laag geen directe SQL execute-calls meer bevat; de architecture-boundary test hoeft nu geen legacy-uitzondering meer voor `platform.py` te dragen.
+
+Update deze iteratie: `auth` routes gebruiken nu `AuthSecurityService` i.p.v. directe `SecurityRepository` imports; hiermee vervalt de laatste legacy-uitzondering voor route→repository import-boundary en is die architectuurregel nu volledig afdwingbaar.
+
+Update deze iteratie: route-level user lookups in `auth.py` zijn verplaatst naar `AuthUserService` (select-based), inclusief bootstrap-admin pad, zodat de route-laag nu geen directe ORM `.query(...)` calls meer bevat en de DB-query boundary-test zonder auth-exception kan gelden.
+
+Update deze iteratie: fase 1 stap 1 extra verankerd met policy-tooling `tools/check_legacy_runtime_references.py` + regressietest en CI-gate, zodat runtime/CI paden geen verwijzingen naar de verwijderde legacy server-runtime meer kunnen introduceren.
+
+Update deze iteratie: fase 1 stap 4 (API versioning) verder geborgd met een expliciete policy-test (`backend/tests/test_api_versioning_policy.py`) die afdwingt dat routers alleen onder `/api/v1` of `/api/public/v1` worden gemount, plus documentatie van de verificatiestap in `docs/api-versioning.md`.
+
+Update deze iteratie: fase 1 afgerond geborgd met regressietests (`backend/tests/test_phase1_architecture_completion.py`) voor verplichte domain-events wiring (publisher/subscribers/worker handlers) en architectuurketen `route -> service -> domain` voor complexe playlist/device logica.
+
+Update deze iteratie: fase 2 stap 6 (MFA hardening) aangescherpt door refresh-token rotatie te blokkeren voor inactieve accounts én admin-accounts zonder geactiveerde MFA; de refresh-token wordt daarbij direct gerevoked en regressietests dekken beide paden.
+
+Update deze iteratie: fase 2 stap 7 (device provisioning hardening) aangescherpt met tenant-scoped tokenuitgifte: platform-superadmin zonder org-context moet expliciet `organization_id` meegeven, superadmin mag doelorg kiezen en org-admins mogen geen cross-org provisioning token uitgeven; regressietests dekken alle paden.
+
+Update deze iteratie: fase 2 stap 8 (secrets management) verankerd met runtime policy-enforcement in settings: buiten dev is `JWT_SECRETS` (Kubernetes key-ring) verplicht, dev fallback secrets zijn verboden in non-dev en `RECALL_CLAMAV_FAIL_OPEN=true` blijft geblokkeerd; regressietests en docs bijgewerkt.
+
+Update deze iteratie: fase 2 stap 9 (supply chain security) regressiebestendig gemaakt met policytest `backend/tests/test_supply_chain_policy.py` die SBOM generatie (syft), vulnerability scan met `--fail-on high` (grype), artifact signing (cosign) en artifact upload in CI afdwingt.
+
+Update deze iteratie: fase 2 stap 10 (upload sandboxing) verder gehard met fail-fast op lege uploads, image MIME↔content validatie (spoofing-blokkade), beeld-dimensie/pixel-limieten als parser-sandbox guardrail en cleanup van dubbele video-inspectiecall; regressietests toegevoegd.
+
+Update deze iteratie: fase 3 stap 11 (staging omgeving) regressiebestendig gemaakt met policytest `backend/tests/test_environment_promotion_policy.py` die lineaire promotie (`dev -> staging -> production`), stage dependencies en staging smoke-checks (backend + agent) in de workflow afdwingt.
+
+Update deze iteratie: fase 3 stap 13 (disaster recovery) regressiebestendig gemaakt met policytest `backend/tests/test_disaster_recovery_policy.py` die runbook + Kubernetes CronJobs afdwingt voor dagelijkse DB/media backups, maandelijkse staging restore drill en verplichte restore-validatiestappen.
+
+Update deze iteratie: fase 3 stap 14 (distributed tracing) regressiebestendig gemaakt met policytest `backend/tests/test_distributed_tracing_policy.py` die tracing-documentatie (FastAPI/Celery/PostgreSQL/Redis + Jaeger/Tempo) en runtime hooks (`init_tracing` voor API/worker) afdwingt.
+
+Update deze iteratie: fase 3 stap 15 (agent in compose stack) regressiebestendig gemaakt met policytest `backend/tests/test_compose_stack_policy.py` die afdwingt dat compose de services `api`, `worker`, `frontend`, `postgres`, `redis` en `agent` bevat en dat agent aan de API is gekoppeld.
+
+Update deze iteratie: fase 4 stap 16 (coverage >85
+Update deze iteratie: fase 4 stap 16 (coverage >85%) regressiebestendig gemaakt met policytest `backend/tests/test_coverage_gate_policy.py` die gecombineerde backend+agent coverage-gate (`--cov-fail-under=85`) en per-module threshold checks in CI afdwingt; coverage-baseline documentatie is hiermee gesynchroniseerd.
+
+Update deze iteratie: fase 4 stap 18 (frontend engineering maturity) regressiebestendig gemaakt met policytest `backend/tests/test_frontend_maturity_policy.py` die ESLint/Prettier/Vitest scripts, devDependencies en testconfiguratie in `frontend/` afdwingt.
+
+Update deze iteratie: fase 4 stap 18 (frontend engineering maturity) verder verankerd door ESLint browser/test globals expliciet te definiëren in `frontend/eslint.config.js`, waardoor lint nu schoon draait op bestaande pages/tests; policytest + frontend lint/vitest runs bevestigen regressievrije tooling-gates.
+
+Update deze iteratie: fase 4 stap 19 (developer onboarding) regressiebestendig gemaakt met policytest `backend/tests/test_developer_onboarding_policy.py` die verplichte onboarding-inhoud afdwingt (projectstructuur, lokale setup, debug-flows en teststrategie met backend/frontend/agent checks).
+
+Update deze iteratie: fase 4 stap 20 (dependency governance) regressiebestendig gemaakt met policytest `backend/tests/test_dependency_governance_policy.py` die dependency-policy documentatie en security workflow controls (Bandit + pip-audit met tijdelijke CVE-exception) afdwingt.

@@ -26,6 +26,13 @@ def _png_bytes(color: str, size: tuple[int, int] = (16, 16)) -> bytes:
     return buf.getvalue()
 
 
+def _jpeg_bytes(color: str, size: tuple[int, int] = (16, 16)) -> bytes:
+    img = Image.new("RGB", size, color=color)
+    buf = BytesIO()
+    img.save(buf, format="JPEG")
+    return buf.getvalue()
+
+
 def test_media_duplicate_detection_and_versioning(tmp_path: Path, monkeypatch) -> None:
     db = _db_session()
     monkeypatch.setattr(media_service_module.settings, "media_dir", str(tmp_path))
@@ -165,3 +172,24 @@ def test_media_workflow_transition_enforces_organization_scope(
 
     with pytest.raises(ValueError, match="media not found"):
         svc.transition_workflow_state(media.id, "review", organization_id=999)
+
+
+def test_validate_upload_rejects_empty_payload(tmp_path: Path, monkeypatch) -> None:
+    db = _db_session()
+    monkeypatch.setattr(media_service_module.settings, "media_dir", str(tmp_path))
+    svc = MediaService(db)
+
+    with pytest.raises(ValueError, match="Empty upload is not allowed"):
+        svc.validate_upload("empty.png", 0, "image/png", b"")
+
+
+def test_validate_upload_rejects_image_mime_content_mismatch(
+    tmp_path: Path, monkeypatch
+) -> None:
+    db = _db_session()
+    monkeypatch.setattr(media_service_module.settings, "media_dir", str(tmp_path))
+    svc = MediaService(db)
+
+    jpeg_payload = _jpeg_bytes("blue")
+    with pytest.raises(ValueError, match="Image content does not match MIME type"):
+        svc.validate_upload("fake.png", len(jpeg_payload), "image/png", jpeg_payload)

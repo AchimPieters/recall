@@ -85,6 +85,7 @@ class DeviceCapabilitiesPayload(BaseModel):
 
 class ProvisioningTokenCreatePayload(BaseModel):
     expires_in_minutes: int = Field(default=30, ge=1, le=1440)
+    organization_id: int | None = Field(default=None, ge=1)
 
 
 class DeviceEnrollPayload(BaseModel):
@@ -173,9 +174,22 @@ def create_provisioning_token(
     db: Session = Depends(get_db),
     user: AuthUser = Depends(get_current_user),
 ):
+    target_organization_id = user.organization_id
+    if payload.organization_id is not None:
+        if user.role == "superadmin":
+            target_organization_id = payload.organization_id
+        elif user.organization_id != payload.organization_id:
+            raise HTTPException(status_code=403, detail="Cross-organization access denied")
+
+    if target_organization_id is None:
+        raise HTTPException(
+            status_code=400,
+            detail="organization_id is required for platform-scoped provisioning",
+        )
+
     token = DeviceService(db).create_provisioning_token(
         actor=user.username,
-        organization_id=user.organization_id,
+        organization_id=target_organization_id,
         expires_in_minutes=payload.expires_in_minutes,
     )
     return token
