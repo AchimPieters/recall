@@ -25,6 +25,10 @@ jobs:
       - name: Validate changelog includes release section
         run: python tools/changelog_release_check.py "${GITHUB_REF_NAME}"
 
+      - name: Validate strict acceptance sign-off for release tag
+        run: |
+          python tools/acceptance_check.py --strict --file "docs/releases/acceptance/${GITHUB_REF_NAME}-signoff.md" --expected-version "${GITHUB_REF_NAME}"
+
       - name: Backend release smoke tests
         run: |
           python -m pip install --upgrade pip

@@ -24,6 +24,9 @@ class PublicApiClient:
 class PublicApiContext:
     tenant: str
     api_key_id: str
+    rate_limit_per_minute: int
+    rate_limit_remaining: int
+    rate_limit_reset_seconds: int
 
 
 _rate_limit_store: dict[str, list[datetime]] = {}
@@ -63,16 +66,28 @@ def _prune_entries(cache_key: str, now: datetime) -> list[datetime]:
     return pruned
 
 
-def _enforce_tenant_rate_limit(*, tenant: str, limit: int, now: datetime) -> None:
+def _enforce_tenant_rate_limit(*, tenant: str, limit: int, now: datetime) -> tuple[int, int]:
     cache_key = f"tenant:{tenant}"
     with _rate_limit_lock:
         attempts = _prune_entries(cache_key, now)
         if len(attempts) >= limit:
+            oldest = min(attempts) if attempts else now
+            reset_seconds = max(0, 60 - int((now - oldest).total_seconds()))
             raise HTTPException(
-                status_code=429, detail="Public API tenant rate limit exceeded"
+                status_code=429,
+                detail="Public API tenant rate limit exceeded",
+                headers={
+                    "X-RateLimit-Limit": str(limit),
+                    "X-RateLimit-Remaining": "0",
+                    "X-RateLimit-Reset": str(reset_seconds),
+                },
             )
         attempts.append(now)
         _rate_limit_store[cache_key] = attempts
+        remaining = max(0, limit - len(attempts))
+        oldest = min(attempts) if attempts else now
+        reset_seconds = max(0, 60 - int((now - oldest).total_seconds()))
+        return remaining, reset_seconds
 
 
 def get_public_api_context(
@@ -99,15 +114,29 @@ def get_public_api_context(
         if client is None:
             raise HTTPException(status_code=401, detail="Invalid API key")
         now = datetime.now(timezone.utc)
-        _enforce_tenant_rate_limit(
+        remaining, reset_seconds = _enforce_tenant_rate_limit(
             tenant=client.tenant, limit=client.rate_limit_per_minute, now=now
         )
-        return PublicApiContext(tenant=client.tenant, api_key_id=x_api_key[:6])
+        return PublicApiContext(
+            tenant=client.tenant,
+            api_key_id=x_api_key[:6],
+            rate_limit_per_minute=client.rate_limit_per_minute,
+            rate_limit_remaining=remaining,
+            rate_limit_reset_seconds=reset_seconds,
+        )
 
     now = datetime.now(timezone.utc)
     tenant = "global" if row.organization_id is None else f"org-{row.organization_id}"
-    _enforce_tenant_rate_limit(tenant=tenant, limit=row.rate_limit_per_minute, now=now)
-    return PublicApiContext(tenant=tenant, api_key_id=str(row.id))
+    remaining, reset_seconds = _enforce_tenant_rate_limit(
+        tenant=tenant, limit=row.rate_limit_per_minute, now=now
+    )
+    return PublicApiContext(
+        tenant=tenant,
+        api_key_id=str(row.id),
+        rate_limit_per_minute=row.rate_limit_per_minute,
+        rate_limit_remaining=remaining,
+        rate_limit_reset_seconds=reset_seconds,
+    )
 
 
 def reset_public_api_rate_limits_for_tests() -> None:

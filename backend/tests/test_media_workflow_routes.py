@@ -1,8 +1,10 @@
+import json
 from fastapi.testclient import TestClient
 
 from backend.app.api.main import app
 from backend.app.core.security import create_access_token, get_password_hash
 from backend.app.db.database import Base, SessionLocal, engine
+from backend.app.models.event import Event
 from backend.app.models.media import Media
 from backend.app.models.settings import User
 
@@ -119,3 +121,55 @@ def test_editor_reviewer_publish_workflow_roles() -> None:
     )
     assert to_published.status_code == 200
     assert to_published.json()["workflow_state"] == "published"
+
+
+def test_reviewer_to_draft_requires_reason() -> None:
+    _ensure_user("media-reviewer-draft", role="reviewer", organization_id=9)
+    media_id = _create_media(organization_id=9, workflow_state="review")
+    reviewer_token = create_access_token(subject="media-reviewer-draft", role="reviewer")
+
+    missing_reason = client.post(
+        f"/api/v1/media/{media_id}/workflow/transition",
+        json={"state": "draft"},
+        headers={"Authorization": f"Bearer {reviewer_token}"},
+    )
+    assert missing_reason.status_code == 400
+    assert "transition reason required" in missing_reason.json()["detail"]
+
+    with_reason = client.post(
+        f"/api/v1/media/{media_id}/workflow/transition",
+        json={"state": "draft", "reason": "Needs legal update"},
+        headers={"Authorization": f"Bearer {reviewer_token}"},
+    )
+    assert with_reason.status_code == 200
+    assert with_reason.json()["workflow_state"] == "draft"
+
+
+def test_workflow_transition_writes_audit_event_payload() -> None:
+    _ensure_user("media-reviewer-event", role="reviewer", organization_id=10)
+    media_id = _create_media(organization_id=10, workflow_state="review")
+    reviewer_token = create_access_token(subject="media-reviewer-event", role="reviewer")
+
+    response = client.post(
+        f"/api/v1/media/{media_id}/workflow/transition",
+        json={"state": "draft", "reason": "Needs translation review"},
+        headers={"Authorization": f"Bearer {reviewer_token}"},
+    )
+    assert response.status_code == 200
+
+    db = SessionLocal()
+    try:
+        event = (
+            db.query(Event)
+            .filter(Event.category == "media_workflow", Event.action == "state_transition")
+            .order_by(Event.id.desc())
+            .first()
+        )
+        assert event is not None
+        payload = json.loads(event.payload)
+        assert payload["media_id"] == media_id
+        assert payload["from_state"] == "review"
+        assert payload["to_state"] == "draft"
+        assert payload["reason"] == "Needs translation review"
+    finally:
+        db.close()

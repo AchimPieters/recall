@@ -14,6 +14,7 @@ settings = get_settings()
 
 class WorkflowTransitionPayload(BaseModel):
     state: str = Field(min_length=3, max_length=32)
+    reason: str | None = Field(default=None, max_length=500)
 
 
 def _enforce_workflow_role(target_state: str, user: AuthUser) -> None:
@@ -125,6 +126,7 @@ def transition_media_workflow(
             media_id,
             payload.state,
             organization_id=user.organization_id,
+            transition_reason=payload.reason,
         )
     except ValueError as exc:
         if str(exc) == "media not found":

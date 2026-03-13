@@ -39,7 +39,11 @@ def sync_once(session: requests.Session) -> None:
     register_device(session)
     report_version(session)
 
+    previous_config = read_cached_config() or {}
     config_payload = fetch_device_config(session)
+    previous_local_path = previous_config.get("active_media_local_path")
+    if previous_local_path and not config_payload.get("active_media_local_path"):
+        config_payload["active_media_local_path"] = previous_local_path
     write_cached_config(config_payload)
     play_zone_plan(config_payload)
 
