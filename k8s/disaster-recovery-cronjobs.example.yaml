@@ -1,0 +1,101 @@
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: recall-db-backup
+  namespace: recall
+spec:
+  schedule: "0 2 * * *"
+  successfulJobsHistoryLimit: 3
+  failedJobsHistoryLimit: 3
+  jobTemplate:
+    spec:
+      template:
+        spec:
+          restartPolicy: OnFailure
+          containers:
+            - name: pg-dump
+              image: postgres:16
+              command:
+                - /bin/sh
+                - -c
+                - >-
+                  TS=$(date -u +%Y%m%dT%H%M%SZ) &&
+                  pg_dump -Fc "$DATABASE_URL" > "/backup/db/recall-${TS}.dump" &&
+                  sha256sum "/backup/db/recall-${TS}.dump" > "/backup/db/recall-${TS}.dump.sha256"
+              env:
+                - name: DATABASE_URL
+                  valueFrom:
+                    secretKeyRef:
+                      name: recall-secrets
+                      key: DATABASE_URL
+              volumeMounts:
+                - name: backup-volume
+                  mountPath: /backup
+          volumes:
+            - name: backup-volume
+              persistentVolumeClaim:
+                claimName: recall-backup-pvc
+---
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: recall-media-backup
+  namespace: recall
+spec:
+  schedule: "30 2 * * *"
+  successfulJobsHistoryLimit: 3
+  failedJobsHistoryLimit: 3
+  jobTemplate:
+    spec:
+      template:
+        spec:
+          restartPolicy: OnFailure
+          containers:
+            - name: media-rsync
+              image: alpine:3.20
+              command:
+                - /bin/sh
+                - -c
+                - >-
+                  apk add --no-cache rsync coreutils >/dev/null 2>&1 &&
+                  TS=$(date -u +%Y%m%dT%H%M%SZ) &&
+                  mkdir -p "/backup/media/${TS}" &&
+                  rsync -a --delete /media/ "/backup/media/${TS}/" &&
+                  find "/backup/media/${TS}" -type f -print0 | sort -z | xargs -0 sha256sum > "/backup/media/${TS}.sha256"
+              volumeMounts:
+                - name: media-volume
+                  mountPath: /media
+                - name: backup-volume
+                  mountPath: /backup
+          volumes:
+            - name: media-volume
+              persistentVolumeClaim:
+                claimName: recall-media-pvc
+            - name: backup-volume
+              persistentVolumeClaim:
+                claimName: recall-backup-pvc
+---
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: recall-dr-restore-drill
+  namespace: recall-staging
+spec:
+  schedule: "0 5 1 * *"
+  successfulJobsHistoryLimit: 3
+  failedJobsHistoryLimit: 3
+  jobTemplate:
+    spec:
+      template:
+        spec:
+          restartPolicy: OnFailure
+          containers:
+            - name: restore-drill
+              image: postgres:16
+              command:
+                - /bin/sh
+                - -c
+                - >-
+                  echo "Run monthly restore drill using latest approved dump";
+                  echo "Hook this job into your internal restore validation pipeline.";
+                  exit 0

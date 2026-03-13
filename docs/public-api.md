@@ -15,6 +15,11 @@ RECALL_PUBLIC_API_KEYS="public-key-1:tenant-a:60,public-key-2:tenant-b:30"
 ## Rate limiting
 - Rate limiting is enforced per tenant (per-minute window).
 - Exceeding limit returns HTTP `429`.
+- Responses include explicit rate-limit contract headers:
+  - `X-RateLimit-Limit`
+  - `X-RateLimit-Remaining`
+  - `X-RateLimit-Reset`
+  - `X-Public-Tenant`
 
 ## Endpoints
 - `GET /api/public/v1/health`

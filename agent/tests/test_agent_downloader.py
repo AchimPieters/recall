@@ -30,6 +30,13 @@ class _FakeResponse:
             yield self._payload[i : i + chunk_size]
 
 
+class _BrokenStreamResponse(_FakeResponse):
+    def iter_content(self, chunk_size: int = 8192):
+        midpoint = max(1, len(self._payload) // 2)
+        yield self._payload[:midpoint]
+        raise requests.RequestException("stream interrupted")
+
+
 class _FakeSession:
     def __init__(self, responses: list[_FakeResponse | Exception]) -> None:
         self._responses = responses
@@ -60,10 +67,13 @@ def test_download_asset_retries_then_succeeds(tmp_path: Path, monkeypatch) -> No
     assert session.calls == 2
 
 
-def test_download_asset_checksum_mismatch_raises(tmp_path: Path, monkeypatch) -> None:
+def test_download_asset_checksum_mismatch_keeps_existing_cached_file(tmp_path: Path, monkeypatch) -> None:
     payload = b"integrity"
     wrong_checksum = hashlib.sha256(b"different").hexdigest()
     session = _FakeSession([_FakeResponse(payload)])
+
+    existing = tmp_path / "test.bin"
+    existing.write_bytes(b"cached-old")
 
     monkeypatch.setattr(config, "MEDIA_CACHE_DIR", tmp_path)
     monkeypatch.setattr(config, "SERVER", "http://localhost:8000")
@@ -74,4 +84,21 @@ def test_download_asset_checksum_mismatch_raises(tmp_path: Path, monkeypatch) ->
     with pytest.raises(DownloadIntegrityError):
         download_asset(session, "media/test.bin", expected_checksum=wrong_checksum)
 
-    assert not (tmp_path / "test.bin").exists()
+    assert existing.read_bytes() == b"cached-old"
+    assert not (tmp_path / "test.bin.part").exists()
+
+
+def test_download_asset_cleans_partial_file_after_stream_failure(tmp_path: Path, monkeypatch) -> None:
+    session = _FakeSession([_BrokenStreamResponse(b"partial-content")])
+
+    monkeypatch.setattr(config, "MEDIA_CACHE_DIR", tmp_path)
+    monkeypatch.setattr(config, "SERVER", "http://localhost:8000")
+    monkeypatch.setattr(config, "VERIFY_TLS", False)
+    monkeypatch.setattr(config, "DOWNLOAD_MAX_RETRIES", 1)
+    monkeypatch.setattr(config, "DOWNLOAD_RETRY_BACKOFF_SECONDS", 0)
+
+    with pytest.raises(requests.RequestException):
+        download_asset(session, "media/broken.bin")
+
+    assert not (tmp_path / "broken.bin").exists()
+    assert not (tmp_path / "broken.bin.part").exists()

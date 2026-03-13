@@ -195,3 +195,21 @@ Update deze iteratie: extra tenant-isolatie regressies toegevoegd voor private p
 Update deze iteratie: RBAC/multi-tenant regressies uitgebreid voor public-api-key beheer met superadmin cross-org gedrag (list en disable van andere tenant key) naast bestaande org-admin blokkades. Dit versterkt stap 6 en 20 op governancevlak.
 
 Update deze iteratie: migratie-tooling testdekking uitgebreid met unit/regressietests voor `backend.app.db.migrate_cli` (dry-run, applied migrations, no pending) zodat expliciete migratie-executiepaden regressievrij blijven.
+
+Update deze iteratie: edge reliability verder gehard door agent-downloads atomisch via `.part` bestanden uit te voeren met cleanup bij streamfouten en behoud van bestaande cache bij checksum/network failures, plus fallback-behoud van `active_media_local_path` in `sync_once` en regressietests. Dit versterkt stap 24 (network outages/partial downloads/media corruption) en verkleint risico op corrupte cache-overschrijvingen.
+
+Update deze iteratie: release-acceptatie governance verder aangescherpt door strict sign-off validatie uit te breiden met `--expected-version` (tag ↔ sign-off versie-consistentie), ISO-datumcontrole en blokkade op placeholder approver-identiteiten; release workflow gebruikt nu expliciet deze versiebinding voor tagged releases.
+
+Update deze iteratie: product release maturity verder doorgezet met enterprise release-artifacts voor `v2.0.0` (release notes + strict acceptance sign-off) en changelog-entry, zodat release-governance nu ook een volgende major release formeel ondersteunt.
+
+Update deze iteratie: release pipeline automatisering uitgebreid met `tools/release_artifact_scaffold.py` voor semver-gevalideerde generatie van changelog heading, enterprise release notes en acceptance sign-off templates, inclusief regressietests. Dit verstevigt stap 12/26 rond herhaalbare release-uitvoer.
+
+Update deze iteratie: content workflow governance aangescherpt met verplichte reason bij transitie terug naar `draft` vanuit `review/approved` (API payload + service-validatie + route-test), zodat reviewer feedback traceerbaar en afdwingbaar is binnen stap 21.
+
+Update deze iteratie: analytics engine verdiept met `/api/v1/analytics/timeseries` (tenant-scoped daily buckets voor impressions + playback errors over configureerbaar venster), inclusief regressietest en documentatie-update. Dit versterkt stap 22 richting dashboard-grade trendanalyse.
+
+Update deze iteratie: content workflow verder geprofessionaliseerd met persistente `media_workflow/state_transition` events inclusief `from_state`, `to_state` en optionele reviewer reason in payload; regressietest valideert audit-traceability van workflowbesluiten. Dit verstevigt stap 21 richting enterprise-governance.
+
+Update deze iteratie: public API contract verhard met expliciete rate-limit headers (`X-RateLimit-*`, `X-Public-Tenant`) op success- en 429-responses, inclusief regressietests en documentatie. Dit versterkt stap 23 (developer-grade public API) met beter machineleesbaar client-contract.
+
+Update deze iteratie: architectuurlaag aangescherpt door analytics-querylogica te verplaatsen van route naar `AnalyticsService` (summary + timeseries), met aanvullende servicetest voor tenant-scoping. Dit verstevigt fase 1/4 architectuur-consistentie (`route -> service`).

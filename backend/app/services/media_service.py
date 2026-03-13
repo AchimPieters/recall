@@ -1,3 +1,4 @@
+import json
 import hashlib
 import mimetypes
 import subprocess  # nosec B404
@@ -12,6 +13,7 @@ from sqlalchemy.orm import Session
 
 from backend.app.core.events import MEDIA_UPLOADED, make_event, publisher
 from backend.app.core.config import get_settings
+from backend.app.models.event import Event
 from backend.app.models.media import Media, MediaVersion
 
 settings = get_settings()
@@ -320,6 +322,7 @@ class MediaService:
         media_id: int,
         target_state: str,
         organization_id: int | None = None,
+        transition_reason: str | None = None,
     ) -> Media:
         target = (target_state or "").strip().lower()
         if target not in WORKFLOW_STATES:
@@ -339,7 +342,30 @@ class MediaService:
         if target not in allowed:
             raise ValueError(f"invalid workflow transition {current}->{target}")
 
+        reason = (transition_reason or "").strip() or None
+        if target == "draft" and current in {"review", "approved"}:
+            if reason is None or len(reason) < 8:
+                raise ValueError(
+                    "transition reason required when moving back to draft from review/approved"
+                )
+
         media.workflow_state = target
+        self.db.add(
+            Event(
+                organization_id=media.organization_id,
+                category="media_workflow",
+                action="state_transition",
+                actor="media-service",
+                payload=json.dumps(
+                    {
+                        "media_id": media.id,
+                        "from_state": current,
+                        "to_state": target,
+                        "reason": reason,
+                    }
+                ),
+            )
+        )
         self.db.commit()
         self.db.refresh(media)
         return media

@@ -62,6 +62,11 @@ jobs:
             --threshold agent.py=40 \
             --threshold agent_modules/recovery.py=80
 
+
+      - name: Combined backend+agent coverage gate (85%)
+        run: |
+          pytest -q backend/tests agent/tests             --cov=backend/app             --cov=agent             --cov-report=term-missing             --cov-report=xml:coverage-combined.xml             --cov-fail-under=85
+
       - name: Upload coverage reports
         uses: actions/upload-artifact@v4
         with:
@@ -69,3 +74,4 @@ jobs:
           path: |
             coverage-backend.xml
             coverage-agent.xml
+            coverage-combined.xml

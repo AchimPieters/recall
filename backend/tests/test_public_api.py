@@ -35,6 +35,10 @@ def test_public_api_accepts_valid_key_and_returns_tenant() -> None:
     assert payload["status"] == "ok"
     assert payload["tenant"] == "tenant-a"
     assert payload["version"] == "v1"
+    assert response.headers["X-RateLimit-Limit"] == "5"
+    assert response.headers["X-RateLimit-Remaining"] == "4"
+    assert "X-RateLimit-Reset" in response.headers
+    assert response.headers["X-Public-Tenant"] == "tenant-a"
 
 
 def test_public_api_enforces_tenant_rate_limit() -> None:
@@ -76,3 +80,14 @@ def test_public_api_rate_limit_is_isolated_between_tenants() -> None:
     assert tenant_b_first.status_code == 200
     assert tenant_b_first.json()["tenant"] == "tenant-b"
     assert tenant_a_second.status_code == 429
+
+
+def test_public_api_429_includes_rate_limit_headers() -> None:
+    _set_public_keys("public-key-1:tenant-a:1")
+    client.get("/api/public/v1/health", headers={"X-API-Key": "public-key-1"})
+    limited = client.get("/api/public/v1/health", headers={"X-API-Key": "public-key-1"})
+
+    assert limited.status_code == 429
+    assert limited.headers["X-RateLimit-Limit"] == "1"
+    assert limited.headers["X-RateLimit-Remaining"] == "0"
+    assert "X-RateLimit-Reset" in limited.headers

@@ -116,3 +116,23 @@ def test_analytics_summary_filters_by_tenant() -> None:
     assert payload["content_impressions"] == 1
     assert payload["playback_errors_24h"] == 1
     assert payload["screen_activity_24h"] == 2
+
+
+def test_analytics_timeseries_returns_tenant_scoped_daily_points() -> None:
+    token = _seed_user()
+    _seed_data()
+
+    response = client.get(
+        "/api/v1/analytics/timeseries?days=2",
+        headers={"Authorization": f"Bearer {token}"},
+    )
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["window_days"] == 2
+    assert len(payload["points"]) == 2
+
+    latest = payload["points"][-1]
+    assert "date" in latest
+    assert latest["content_impressions"] == 1
+    assert latest["playback_errors"] == 1
