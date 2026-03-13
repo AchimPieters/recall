@@ -32,6 +32,14 @@ MIME_EXTENSION_MAP = {
     "video/mp4": {".mp4"},
     "video/webm": {".webm"},
 }
+IMAGE_MIME_FORMAT_MAP = {
+    "image/png": "PNG",
+    "image/jpeg": "JPEG",
+    "image/webp": "WEBP",
+}
+MAX_IMAGE_WIDTH = 8192
+MAX_IMAGE_HEIGHT = 8192
+MAX_IMAGE_PIXELS = 40_000_000
 
 
 WORKFLOW_STATES = {"draft", "review", "approved", "published", "archived"}
@@ -74,6 +82,8 @@ class MediaService:
     def validate_upload(
         self, filename: str, size: int, mime_type: str, data: bytes | None = None
     ) -> None:
+        if size <= 0:
+            raise ValueError("Empty upload is not allowed")
         if size > settings.max_upload_bytes:
             raise ValueError("Upload too large")
         if mime_type not in ALLOWED_MIME_TYPES:
@@ -93,6 +103,15 @@ class MediaService:
         if mime_type.startswith("image/"):
             try:
                 with Image.open(BytesIO(data)) as img:
+                    actual_format = (img.format or "").upper()
+                    expected_format = IMAGE_MIME_FORMAT_MAP.get(mime_type)
+                    if expected_format and actual_format != expected_format:
+                        raise ValueError("Image content does not match MIME type")
+                    width, height = img.size
+                    if width > MAX_IMAGE_WIDTH or height > MAX_IMAGE_HEIGHT:
+                        raise ValueError("Image dimensions exceed security limits")
+                    if width * height > MAX_IMAGE_PIXELS:
+                        raise ValueError("Image pixel count exceeds security limits")
                     img.verify()
             except (UnidentifiedImageError, OSError) as exc:
                 raise ValueError("Invalid image structure") from exc

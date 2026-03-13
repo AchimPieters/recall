@@ -32,30 +32,30 @@ pip install fastapi uvicorn psutil requests python-multipart
 
 mkdir -p media
 
-sudo tee /etc/systemd/system/recall-server.service > /dev/null <<EOF_SERVICE
+sudo tee /etc/systemd/system/recall-backend.service > /dev/null <<EOF_SERVICE
 [Unit]
-Description=Recall Server
+Description=Recall Backend API
 After=network.target
 
 [Service]
 User=$USER
-WorkingDirectory=$INSTALL_DIR/recall-server/api
-ExecStart=$INSTALL_DIR/venv/bin/uvicorn server:app --host 0.0.0.0 --port 8000
+WorkingDirectory=$INSTALL_DIR
+ExecStart=$INSTALL_DIR/venv/bin/uvicorn backend.app.api.main:app --host 0.0.0.0 --port 8000
 Restart=always
 
 [Install]
 WantedBy=multi-user.target
 EOF_SERVICE
 
-sudo tee /etc/systemd/system/recall-player.service > /dev/null <<EOF_SERVICE
+sudo tee /etc/systemd/system/recall-agent.service > /dev/null <<EOF_SERVICE
 [Unit]
-Description=Recall Player
+Description=Recall Agent
 After=network.target
 
 [Service]
 User=$USER
-WorkingDirectory=$INSTALL_DIR/recall-player
-ExecStart=$INSTALL_DIR/venv/bin/python agent.py
+WorkingDirectory=$INSTALL_DIR/agent
+ExecStart=$INSTALL_DIR/venv/bin/python $INSTALL_DIR/agent/agent.py
 Restart=always
 
 [Install]
@@ -63,10 +63,10 @@ WantedBy=multi-user.target
 EOF_SERVICE
 
 sudo systemctl daemon-reload
-sudo systemctl enable recall-server
-sudo systemctl enable recall-player
-sudo systemctl start recall-server
-sudo systemctl start recall-player
+sudo systemctl enable recall-backend
+sudo systemctl enable recall-agent
+sudo systemctl start recall-backend
+sudo systemctl start recall-agent
 
 IP=$(hostname -I | awk '{print $1}')
 

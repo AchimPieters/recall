@@ -19,6 +19,7 @@
 - Alembic orchestration entrypoint: `cd backend && alembic upgrade head`
 
 ## Verification
+- `python tools/check_runtime_schema_mutations.py --repo-root .`
 - `rg "Base\.metadata\.create_all|ALTER TABLE" backend/app`
 - `cd backend && alembic upgrade head`
 - Ensure `schema_migrations` contains all expected SQL migration versions.

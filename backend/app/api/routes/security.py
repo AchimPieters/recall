@@ -5,7 +5,7 @@ from sqlalchemy.orm import Session
 
 from backend.app.core.auth import AuthUser, get_current_user, require_role
 from backend.app.db.database import get_db
-from backend.app.repositories.security_repository import SecurityRepository
+from backend.app.services.security_service import SecurityService
 
 router = APIRouter(prefix="/security", tags=["security"])
 
@@ -20,8 +20,8 @@ def list_security_audit_events(
     event_type: str | None = None,
     db: Session = Depends(get_db),
 ):
-    rows = SecurityRepository(db).list_security_events(
-        limit=max(1, min(limit, 500)), actor=actor, event_type=event_type
+    rows = SecurityService(db).list_security_events(
+        limit=limit, actor=actor, event_type=event_type
     )
     return [
         {
@@ -53,8 +53,8 @@ def list_audit_logs(
     db: Session = Depends(get_db),
     user: AuthUser = Depends(get_current_user),
 ):
-    rows = SecurityRepository(db).list_audit_logs(
-        limit=max(1, min(limit, 500)),
+    rows = SecurityService(db).list_audit_logs(
+        limit=limit,
         actor_type=actor_type,
         actor_id=actor_id,
         action=action,

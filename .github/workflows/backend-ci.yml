@@ -32,5 +32,9 @@ jobs:
         run: black --check app tests
       - name: Mypy
         run: mypy --ignore-missing-imports app
+      - name: Runtime schema mutation policy
+        run: python ../tools/check_runtime_schema_mutations.py --repo-root ..
+      - name: Legacy runtime reference policy
+        run: python ../tools/check_legacy_runtime_references.py --repo-root ..
       - name: Pytest
         run: pytest -q tests

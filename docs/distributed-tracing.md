@@ -5,6 +5,12 @@ Tracing is initialized for:
 - FastAPI API process (`recall-api`)
 - Celery worker process (`recall-worker`)
 
+## Integrations
+- FastAPI request spans.
+- Celery worker/task spans.
+- PostgreSQL query spans (via SQLAlchemy/opentelemetry instrumentation when enabled in runtime image).
+- Redis client spans (broker/cache paths via opentelemetry instrumentation when enabled in runtime image).
+
 ## Configuration
 Set OTLP endpoint to enable tracing:
 - `RECALL_OTEL_EXPORTER_OTLP_ENDPOINT=http://otel-collector:4318/v1/traces`

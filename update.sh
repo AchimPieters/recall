@@ -10,7 +10,7 @@ git pull
 source venv/bin/activate
 pip install --upgrade fastapi uvicorn psutil requests python-multipart
 
-sudo systemctl restart recall-server
-sudo systemctl restart recall-player
+sudo systemctl restart recall-backend
+sudo systemctl restart recall-agent
 
 echo "Update complete."

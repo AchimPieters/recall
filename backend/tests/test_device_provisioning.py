@@ -11,15 +11,22 @@ from backend.app.models import User
 client = TestClient(app)
 
 
-def _ensure_user(username: str, role: str = "admin") -> None:
+def _ensure_user(username: str, role: str = "admin", organization_id: int | None = 1) -> None:
     Base.metadata.create_all(bind=engine)
     db = SessionLocal()
     try:
         user = db.query(User).filter(User.username == username).first()
         if not user:
-            user = User(username=username, password_hash="x", role=role)
+            user = User(
+                username=username,
+                password_hash="x",
+                role=role,
+                organization_id=organization_id,
+            )
             db.add(user)
-            db.commit()
+        user.role = role
+        user.organization_id = organization_id
+        db.commit()
     finally:
         db.close()
 
@@ -279,3 +286,54 @@ def test_device_api_requires_certificate_when_enabled() -> None:
         os.environ["RECALL_DEVICE_API_REQUIRE_CERTIFICATE"] = "false"
         get_settings.cache_clear()
         devices_route.settings_conf = get_settings()
+
+
+def test_platform_superadmin_must_set_org_for_provisioning_token() -> None:
+    _ensure_user("prov-platform-admin", role="superadmin", organization_id=None)
+    token = create_access_token(subject="prov-platform-admin", role="superadmin")
+
+    missing_org = client.post(
+        "/api/v1/device/provisioning/token",
+        json={"expires_in_minutes": 60},
+        headers={"Authorization": f"Bearer {token}"},
+    )
+    assert missing_org.status_code == 400
+    assert "organization_id is required" in missing_org.json()["detail"]
+
+
+def test_platform_superadmin_can_issue_provisioning_token_for_target_org() -> None:
+    _ensure_user("prov-platform-admin-2", role="superadmin", organization_id=None)
+    token = create_access_token(subject="prov-platform-admin-2", role="superadmin")
+
+    create_resp = client.post(
+        "/api/v1/device/provisioning/token",
+        json={"expires_in_minutes": 60, "organization_id": 42},
+        headers={"Authorization": f"Bearer {token}"},
+    )
+    assert create_resp.status_code == 200
+    provisioning_token = create_resp.json()["token"]
+
+    enroll = client.post(
+        "/api/v1/device/provision/enroll",
+        json={
+            "provisioning_token": provisioning_token,
+            "id": "provisioned-device-platform-org",
+            "name": "Provisioned Device Platform Org",
+        },
+        headers={"X-Device-Protocol-Version": "1"},
+    )
+    assert enroll.status_code == 200
+    assert enroll.json()["organization_id"] == 42
+
+
+def test_org_admin_cannot_issue_provisioning_token_for_other_org() -> None:
+    _ensure_user("prov-org-admin", role="admin", organization_id=7)
+    token = create_access_token(subject="prov-org-admin", role="admin")
+
+    denied = client.post(
+        "/api/v1/device/provisioning/token",
+        json={"expires_in_minutes": 60, "organization_id": 8},
+        headers={"Authorization": f"Bearer {token}"},
+    )
+    assert denied.status_code == 403
+    assert denied.json()["detail"] == "Cross-organization access denied"

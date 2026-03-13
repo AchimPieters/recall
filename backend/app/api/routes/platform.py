@@ -1,13 +1,13 @@
 from fastapi import APIRouter, Depends, HTTPException
 from fastapi.responses import PlainTextResponse
 from prometheus_client import CONTENT_TYPE_LATEST, Gauge, generate_latest
-from sqlalchemy import text
 from sqlalchemy.orm import Session
 
 from backend.app.core.auth import AuthUser, get_current_user, require_role
 from backend.app.core.config import get_settings
 from backend.app.db.database import get_db
 from backend.app.services.device_service import DeviceService
+from backend.app.services.platform_service import PlatformService
 from backend.app.workers.celery_app import get_worker_snapshot
 
 router = APIRouter(tags=["platform"])
@@ -51,7 +51,7 @@ def version():
 
 @router.get("/ready")
 def ready(db: Session = Depends(get_db)):
-    db.execute(text("SELECT 1"))
+    PlatformService(db).check_ready()
     return {"status": "ready"}
 
 
@@ -97,57 +97,15 @@ def observability_summary(
         organization_id=None if include_all_tenants else org_scope
     )
 
-    if include_all_tenants:
-        total_alerts = db.execute(text("SELECT COUNT(*) FROM alerts")).scalar() or 0
-        open_alerts = (
-            db.execute(
-                text("SELECT COUNT(*) FROM alerts WHERE status = 'open'")
-            ).scalar()
-            or 0
-        )
-        resolved_alerts = (
-            db.execute(
-                text("SELECT COUNT(*) FROM alerts WHERE status = 'resolved'")
-            ).scalar()
-            or 0
-        )
-    else:
-        params = {"org": org_scope}
-        scope_filter = "organization_id = :org"
-        total_alerts = (
-            db.execute(
-                text(f"SELECT COUNT(*) FROM alerts WHERE {scope_filter}"), params
-            ).scalar()
-            or 0
-        )
-        open_alerts = (
-            db.execute(
-                text(
-                    f"SELECT COUNT(*) FROM alerts WHERE {scope_filter} AND status = 'open'"
-                ),
-                params,
-            ).scalar()
-            or 0
-        )
-        resolved_alerts = (
-            db.execute(
-                text(
-                    f"SELECT COUNT(*) FROM alerts WHERE {scope_filter} AND status = 'resolved'"
-                ),
-                params,
-            ).scalar()
-            or 0
-        )
+    alert_counts = PlatformService(db).alert_counts(
+        organization_id=None if include_all_tenants else org_scope
+    )
 
     return {
         "devices": {
             "total": len(devices_list),
             "online": len([d for d in devices_list if d.status == "online"]),
         },
-        "alerts": {
-            "total": int(total_alerts),
-            "open": int(open_alerts),
-            "resolved": int(resolved_alerts),
-        },
+        "alerts": alert_counts,
         "workers": get_worker_snapshot(),
     }

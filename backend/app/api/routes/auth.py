@@ -30,7 +30,8 @@ from backend.app.core.security import (
 )
 from backend.app.db.database import get_db
 from backend.app.models import User
-from backend.app.repositories.security_repository import SecurityRepository
+from backend.app.services.auth_security_service import AuthSecurityService
+from backend.app.services.auth_user_service import AuthUserService
 
 router = APIRouter(tags=["auth"])
 limiter = Limiter(key_func=get_remote_address)
@@ -101,18 +102,15 @@ def _require_mfa_for_user(user: User) -> bool:
 
 
 def bootstrap_admin(db: Session) -> None:
-    admin = (
-        db.query(User)
-        .filter(User.username == settings_conf.bootstrap_admin_username)
-        .first()
-    )
+    user_service = AuthUserService(db)
+    admin = user_service.get_by_username(settings_conf.bootstrap_admin_username)
     password = settings_conf.bootstrap_admin_password.strip()
     if admin or not password:
         return
 
     validate_password_policy(password)
 
-    db.add(
+    user_service.add(
         User(
             username=settings_conf.bootstrap_admin_username,
             password_hash=get_password_hash(password),
@@ -120,7 +118,7 @@ def bootstrap_admin(db: Session) -> None:
             is_active=True,
         )
     )
-    db.commit()
+    user_service.commit()
 
 
 def _utc_normalized(dt: datetime) -> datetime:
@@ -208,7 +206,7 @@ def _clear_failed_mfa_setup(username: str) -> None:
 
 
 def _write_auth_audit(
-    sec_repo: SecurityRepository,
+    sec_repo: AuthSecurityService,
     *,
     actor_id: str,
     action: str,
@@ -241,7 +239,7 @@ def login(
 ):
     now = datetime.now(timezone.utc)
     username = form_data.username.strip()
-    sec_repo = SecurityRepository(db)
+    sec_repo = AuthSecurityService(db)
     client_ip = request.client.host if request.client else None
 
     if _is_locked_out(username, now):
@@ -253,7 +251,7 @@ def login(
         )
         raise HTTPException(status_code=429, detail="Account temporarily locked")
 
-    user = db.query(User).filter(User.username == username).first()
+    user = AuthUserService(db).get_by_username(username)
     if user and user.locked_until and _utc_normalized(user.locked_until) > now:
         sec_repo.add_security_event(
             actor=username,
@@ -339,7 +337,7 @@ def refresh_token(
     request: Request,
     db: Session = Depends(get_db),
 ):
-    sec_repo = SecurityRepository(db)
+    sec_repo = AuthSecurityService(db)
     client_ip = request.client.host if request.client else None
     try:
         subject, jti = parse_refresh_token(payload.refresh_token)
@@ -364,7 +362,7 @@ def refresh_token(
         )
         raise HTTPException(status_code=401, detail="Refresh token expired or revoked")
 
-    user = db.query(User).filter(User.username == subject).first()
+    user = AuthUserService(db).get_by_username(subject)
     if not user:
         sec_repo.add_security_event(
             actor=subject,
@@ -373,6 +371,26 @@ def refresh_token(
             ip_address=client_ip,
         )
         raise HTTPException(status_code=401, detail="Unknown user")
+
+    if not user.is_active:
+        sec_repo.revoke_refresh_token(hash_token(jti))
+        sec_repo.add_security_event(
+            actor=subject,
+            event_type="token_refresh_failed",
+            detail="Inactive account",
+            ip_address=client_ip,
+        )
+        raise HTTPException(status_code=403, detail="Account inactive")
+
+    if _require_mfa_for_user(user) and (not user.mfa_enabled or not user.mfa_secret):
+        sec_repo.revoke_refresh_token(hash_token(jti))
+        sec_repo.add_security_event(
+            actor=subject,
+            event_type="token_refresh_failed",
+            detail="Admin MFA required",
+            ip_address=client_ip,
+        )
+        raise HTTPException(status_code=403, detail="MFA required for admin account")
 
     sec_repo.revoke_refresh_token(hash_token(jti))
     new_refresh, new_jti = create_refresh_token(subject=user.username)
@@ -399,7 +417,7 @@ def logout(
     request: Request,
     db: Session = Depends(get_db),
 ):
-    sec_repo = SecurityRepository(db)
+    sec_repo = AuthSecurityService(db)
     client_ip = request.client.host if request.client else None
     try:
         subject, jti = parse_refresh_token(payload.refresh_token)
@@ -429,7 +447,7 @@ def logout_all(
     db: Session = Depends(get_db),
     user: AuthUser = Depends(get_current_user),
 ):
-    sec_repo = SecurityRepository(db)
+    sec_repo = AuthSecurityService(db)
     revoked = sec_repo.revoke_all_refresh_tokens_for_user(user.username)
     client_ip = request.client.host if request.client else None
     sec_repo.add_security_event(
@@ -457,10 +475,10 @@ def request_password_reset(
     request: Request,
     db: Session = Depends(get_db),
 ):
-    sec_repo = SecurityRepository(db)
+    sec_repo = AuthSecurityService(db)
     client_ip = request.client.host if request.client else None
     username = payload.username.strip()
-    user = db.query(User).filter(User.username == username).first()
+    user = AuthUserService(db).get_by_username(username)
 
     if not user:
         sec_repo.add_security_event(
@@ -505,7 +523,7 @@ def confirm_password_reset(
     request: Request,
     db: Session = Depends(get_db),
 ):
-    sec_repo = SecurityRepository(db)
+    sec_repo = AuthSecurityService(db)
     client_ip = request.client.host if request.client else None
     token_hash = hash_token(payload.reset_token)
     record = sec_repo.get_active_password_reset_token(token_hash)
@@ -525,7 +543,7 @@ def confirm_password_reset(
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
 
-    user = db.query(User).filter(User.username == record.username).first()
+    user = AuthUserService(db).get_by_username(record.username)
     if not user:
         raise HTTPException(status_code=404, detail="User not found")
 
@@ -561,13 +579,13 @@ def activate_user(
     db: Session = Depends(get_db),
     actor: AuthUser = Depends(get_current_user),
 ):
-    user = db.query(User).filter(User.username == payload.username.strip()).first()
+    user = AuthUserService(db).get_by_username(payload.username.strip())
     if not user:
         raise HTTPException(status_code=404, detail="User not found")
 
     user.is_active = payload.active
     db.commit()
-    sec_repo = SecurityRepository(db)
+    sec_repo = AuthSecurityService(db)
     client_ip = request.client.host if request.client else None
     sec_repo.add_security_event(
         actor=actor.username,
@@ -595,8 +613,8 @@ def mfa_setup(
     db: Session = Depends(get_db),
     user: AuthUser = Depends(get_current_user),
 ):
-    sec_repo = SecurityRepository(db)
-    entity = db.query(User).filter(User.username == user.username).first()
+    sec_repo = AuthSecurityService(db)
+    entity = AuthUserService(db).get_by_username(user.username)
     if not entity:
         raise HTTPException(status_code=404, detail="User not found")
 
@@ -702,7 +720,7 @@ def mfa_verify(
     request: Request,
     db: Session = Depends(get_db),
 ):
-    sec_repo = SecurityRepository(db)
+    sec_repo = AuthSecurityService(db)
     client_ip = request.client.host if request.client else None
 
     if not payload.mfa_token:
@@ -720,7 +738,7 @@ def mfa_verify(
         username = parse_mfa_token(payload.mfa_token)
     except Exception as exc:  # noqa: BLE001
         raise HTTPException(status_code=401, detail="Invalid MFA token") from exc
-    user = db.query(User).filter(User.username == username).first()
+    user = AuthUserService(db).get_by_username(username)
     if not user:
         raise HTTPException(status_code=404, detail="User not found")
     if not user.mfa_secret or not user.mfa_enabled:
@@ -798,7 +816,7 @@ def audit_logs(
     event_type: str | None = None,
     db: Session = Depends(get_db),
 ):
-    rows = SecurityRepository(db).list_security_events(
+    rows = AuthSecurityService(db).list_security_events(
         limit=max(1, min(limit, 500)), actor=actor, event_type=event_type
     )
     return [

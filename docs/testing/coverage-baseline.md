@@ -6,12 +6,14 @@ Provide a repeatable baseline for line coverage reporting while the full enterpr
 ## Baseline gates
 - Backend coverage gate: `--cov-fail-under=60` on `backend/app`.
 - Agent coverage gate: `--cov-fail-under=60` on `agent`.
-- XML artifacts generated for both domains (`coverage-backend.xml`, `coverage-agent.xml`).
+- Combined enterprise gate: `--cov-fail-under=85` over `backend/app + agent`.
+- XML artifacts generated for all domains (`coverage-backend.xml`, `coverage-agent.xml`, `coverage-combined.xml`).
 
 ## Local commands
 ```bash
 pytest -q backend/tests --cov=backend/app --cov-report=term-missing --cov-report=xml:coverage-backend.xml --cov-fail-under=60
 pytest -q agent/tests --cov=agent --cov-report=term-missing --cov-report=xml:coverage-agent.xml --cov-fail-under=60
+pytest -q backend/tests agent/tests --cov=backend/app --cov=agent --cov-report=term-missing --cov-report=xml:coverage-combined.xml --cov-fail-under=85
 ```
 
 ## CI integration

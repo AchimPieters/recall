@@ -14,13 +14,18 @@ pip3 install fastapi uvicorn websockets psutil python-multipart requests
 
 sudo mkdir -p "$INSTALL_DIR"
 
-sudo cp -r recall-server "$INSTALL_DIR/"
-sudo cp -r recall-player "$INSTALL_DIR/"
+sudo cp -r backend "$INSTALL_DIR/"
+sudo cp -r agent "$INSTALL_DIR/"
 sudo cp -r layouts "$INSTALL_DIR/"
 sudo mkdir -p "$INSTALL_DIR/media"
 
 echo "Installation finished"
 
 echo "Start server with:"
-echo "cd /opt/recall/recall-server/api"
-echo "uvicorn server:app --host 0.0.0.0 --port 8000"
+echo "cd /opt/recall"
+echo "uvicorn backend.app.api.main:app --host 0.0.0.0 --port 8000"
+
+
+echo "Start agent with:"
+echo "cd /opt/recall/agent"
+echo "python agent.py"

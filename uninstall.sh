@@ -3,12 +3,18 @@
 echo "Removing Recall..."
 
 sudo systemctl stop recall-server || true
+sudo systemctl stop recall-backend || true
+sudo systemctl stop recall-agent || true
 sudo systemctl stop recall-player || true
 
 sudo systemctl disable recall-server || true
+sudo systemctl disable recall-backend || true
+sudo systemctl disable recall-agent || true
 sudo systemctl disable recall-player || true
 
 sudo rm -f /etc/systemd/system/recall-server.service
+sudo rm -f /etc/systemd/system/recall-backend.service
+sudo rm -f /etc/systemd/system/recall-agent.service
 sudo rm -f /etc/systemd/system/recall-player.service
 
 sudo systemctl daemon-reload
