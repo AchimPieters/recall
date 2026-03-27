@@ -9,7 +9,9 @@ class AuthUserService:
         self.db = db
 
     def get_by_username(self, username: str) -> User | None:
-        return self.db.execute(select(User).where(User.username == username)).scalar_one_or_none()
+        return self.db.execute(
+            select(User).where(User.username == username)
+        ).scalar_one_or_none()
 
     def add(self, user: User) -> None:
         self.db.add(user)

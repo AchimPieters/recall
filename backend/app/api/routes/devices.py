@@ -179,7 +179,9 @@ def create_provisioning_token(
         if user.role == "superadmin":
             target_organization_id = payload.organization_id
         elif user.organization_id != payload.organization_id:
-            raise HTTPException(status_code=403, detail="Cross-organization access denied")
+            raise HTTPException(
+                status_code=403, detail="Cross-organization access denied"
+            )
 
     if target_organization_id is None:
         raise HTTPException(

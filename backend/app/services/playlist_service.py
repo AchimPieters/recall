@@ -191,14 +191,18 @@ class PlaylistService:
         ends_at: datetime,
         reason: str | None = None,
     ) -> ScheduleException:
-        starts_at = self._normalize(starts_at)
-        ends_at = self._normalize(ends_at)
-        if not starts_at or not ends_at or ends_at <= starts_at:
+        normalized_starts_at = self._normalize(starts_at)
+        normalized_ends_at = self._normalize(ends_at)
+        if (
+            normalized_starts_at is None
+            or normalized_ends_at is None
+            or normalized_ends_at <= normalized_starts_at
+        ):
             raise ValueError("invalid exception window")
         row = ScheduleException(
             schedule_id=schedule_id,
-            starts_at=starts_at,
-            ends_at=ends_at,
+            starts_at=normalized_starts_at,
+            ends_at=normalized_ends_at,
             reason=reason,
         )
         self.db.add(row)
@@ -214,14 +218,18 @@ class PlaylistService:
         ends_at: datetime,
         reason: str | None = None,
     ) -> ScheduleBlackoutWindow:
-        starts_at = self._normalize(starts_at)
-        ends_at = self._normalize(ends_at)
-        if not starts_at or not ends_at or ends_at <= starts_at:
+        normalized_starts_at = self._normalize(starts_at)
+        normalized_ends_at = self._normalize(ends_at)
+        if (
+            normalized_starts_at is None
+            or normalized_ends_at is None
+            or normalized_ends_at <= normalized_starts_at
+        ):
             raise ValueError("invalid blackout window")
         row = ScheduleBlackoutWindow(
             target=target,
-            starts_at=starts_at,
-            ends_at=ends_at,
+            starts_at=normalized_starts_at,
+            ends_at=normalized_ends_at,
             reason=reason,
         )
         self.db.add(row)

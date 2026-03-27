@@ -78,12 +78,17 @@ def test_acceptance_check_strict_enforces_expected_version(tmp_path: Path) -> No
         encoding="utf-8",
     )
 
-    assert acceptance_check.main(
-        ["--strict", "--file", str(signoff), "--expected-version", "v1.2.4"]
-    ) == 1
+    assert (
+        acceptance_check.main(
+            ["--strict", "--file", str(signoff), "--expected-version", "v1.2.4"]
+        )
+        == 1
+    )
 
 
-def test_acceptance_check_strict_rejects_placeholder_approvals_and_bad_date(tmp_path: Path) -> None:
+def test_acceptance_check_strict_rejects_placeholder_approvals_and_bad_date(
+    tmp_path: Path,
+) -> None:
     signoff = tmp_path / "identity-signoff.md"
     signoff.write_text(
         """# Signoff

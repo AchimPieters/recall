@@ -1,6 +1,5 @@
 from pathlib import Path
 
-
 ROUTES_DIR = Path("backend/app/api/routes")
 SERVICES_DIR = Path("backend/app/services")
 REPOSITORIES_DIR = Path("backend/app/repositories")
