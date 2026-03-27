@@ -24,20 +24,8 @@ def _seed() -> None:
         )
         db.add_all(
             [
-                Event(
-                    category="playback",
-                    action="impression",
-                    actor="agent",
-                    payload="{}",
-                    organization_id=11,
-                ),
-                Event(
-                    category="playback",
-                    action="impression",
-                    actor="agent",
-                    payload="{}",
-                    organization_id=12,
-                ),
+                Event(category="playback", action="impression", actor="agent", payload="{}", organization_id=11),
+                Event(category="playback", action="impression", actor="agent", payload="{}", organization_id=12),
             ]
         )
         now = datetime.now(timezone.utc)

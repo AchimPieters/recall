@@ -101,12 +101,10 @@ class DeviceService:
             .first()
         )
         now = self._utc_now()
-        expires_at = self._normalize(token_row.expires_at) if token_row else None
         if (
             not token_row
             or token_row.used_at is not None
-            or expires_at is None
-            or expires_at < now
+            or self._normalize(token_row.expires_at) < now
         ):
             raise ValueError("invalid or expired provisioning token")
 

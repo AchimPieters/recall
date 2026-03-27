@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import importlib
-from importlib.util import find_spec
 from functools import lru_cache
 
 from backend.app.core.config import get_settings
@@ -21,7 +20,7 @@ def init_tracing(service_name: str) -> bool:
         "opentelemetry.sdk.trace.export",
         "opentelemetry.exporter.otlp.proto.http.trace_exporter",
     ]
-    if any(find_spec(module) is None for module in required_modules):
+    if any(importlib.util.find_spec(module) is None for module in required_modules):
         return False
 
     resources = importlib.import_module("opentelemetry.sdk.resources")

@@ -154,16 +154,11 @@ def test_worker_tasks_secret_rotation(monkeypatch) -> None:
         "jwt_secret_last_rotated_at",
         "2026-03-01T00:00:00Z",
     )
-    monkeypatch.setattr(
-        worker_tasks, "SecretRotationService", _FakeSecretRotationService
-    )
+    monkeypatch.setattr(worker_tasks, "SecretRotationService", _FakeSecretRotationService)
 
     assert worker_tasks.evaluate_secret_rotation() == {"status": "ok", "age_days": 0}
     assert captured["last_rotated_at"] == "2026-03-01T00:00:00Z"
-    assert worker_tasks.evaluate_secret_rotation_task() == {
-        "status": "ok",
-        "age_days": 0,
-    }
+    assert worker_tasks.evaluate_secret_rotation_task() == {"status": "ok", "age_days": 0}
 
 
 def test_retryable_task_defaults() -> None:

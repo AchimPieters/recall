@@ -1,9 +1,7 @@
 from pathlib import Path
 
 
-def test_environment_promotion_workflow_enforces_linear_dev_staging_production() -> (
-    None
-):
+def test_environment_promotion_workflow_enforces_linear_dev_staging_production() -> None:
     workflow = (
         Path(__file__).resolve().parents[2]
         / ".github"
@@ -26,6 +24,7 @@ def test_environment_promotion_workflow_enforces_linear_dev_staging_production()
     ]
 
     missing = [token for token in required_tokens if token not in workflow]
-    assert (
-        not missing
-    ), "Environment promotion policy regression: missing tokens: " + ", ".join(missing)
+    assert not missing, (
+        "Environment promotion policy regression: missing tokens: "
+        + ", ".join(missing)
+    )

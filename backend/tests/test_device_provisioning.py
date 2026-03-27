@@ -7,12 +7,11 @@ from backend.app.core.security import create_access_token
 from backend.app.db.database import Base, SessionLocal, engine
 from backend.app.models import User
 
+
 client = TestClient(app)
 
 
-def _ensure_user(
-    username: str, role: str = "admin", organization_id: int | None = 1
-) -> None:
+def _ensure_user(username: str, role: str = "admin", organization_id: int | None = 1) -> None:
     Base.metadata.create_all(bind=engine)
     db = SessionLocal()
     try:

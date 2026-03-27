@@ -17,20 +17,19 @@ def test_init_tracing_returns_false_when_modules_missing(monkeypatch) -> None:
     )
     tracing_module.init_tracing.cache_clear()
 
-    original_find_spec = tracing_module.find_spec
+    original_find_spec = tracing_module.importlib.util.find_spec
 
     def fake_find_spec(name: str):
         if name.startswith("opentelemetry"):
             return None
         return original_find_spec(name)
 
-    monkeypatch.setattr(tracing_module, "find_spec", fake_find_spec)
+    monkeypatch.setattr(tracing_module.importlib.util, "find_spec", fake_find_spec)
     assert tracing_module.init_tracing("recall-api") is False
 
 
-def test_init_tracing_returns_true_when_endpoint_and_modules_available(
-    monkeypatch,
-) -> None:
+
+def test_init_tracing_returns_true_when_endpoint_and_modules_available(monkeypatch) -> None:
     monkeypatch.setattr(
         tracing_module.get_settings(),
         "otel_exporter_otlp_endpoint",
@@ -39,7 +38,7 @@ def test_init_tracing_returns_true_when_endpoint_and_modules_available(
     tracing_module.init_tracing.cache_clear()
 
     monkeypatch.setattr(
-        tracing_module,
+        tracing_module.importlib.util,
         "find_spec",
         lambda name: object() if name.startswith("opentelemetry") else None,
     )
@@ -77,13 +76,7 @@ def test_init_tracing_returns_true_when_endpoint_and_modules_available(
             "O", (), {"OTLPSpanExporter": _Exporter}
         ),
         "opentelemetry.trace": type(
-            "TA",
-            (),
-            {
-                "set_tracer_provider": lambda provider: trace_state.update(
-                    {"provider": provider}
-                )
-            },
+            "TA", (), {"set_tracer_provider": lambda provider: trace_state.update({"provider": provider})}
         ),
     }
 
@@ -94,6 +87,4 @@ def test_init_tracing_returns_true_when_endpoint_and_modules_available(
     )
 
     assert tracing_module.init_tracing("recall-api") is True
-    assert trace_state["provider"].resource == {
-        "resource": {"service.name": "recall-api"}
-    }
+    assert trace_state["provider"].resource == {"resource": {"service.name": "recall-api"}}

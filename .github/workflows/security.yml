@@ -24,6 +24,4 @@ jobs:
       - name: Bandit
         run: bandit -q -r app -lll
       - name: Dependency audit
-        run: >-
-          pip-audit -r requirements.txt --ignore-vuln CVE-2024-23342
-          --ignore-vuln GHSA-5239-wwwm-4pmq
+        run: pip-audit -r requirements.txt --ignore-vuln CVE-2024-23342

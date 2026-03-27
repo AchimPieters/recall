@@ -9,6 +9,7 @@ from backend.app.core.events.types import (
     PLAYLIST_UPDATED,
 )
 
+
 REQUIRED_EVENTS = {
     DEVICE_REGISTERED,
     PLAYLIST_UPDATED,
@@ -19,16 +20,12 @@ REQUIRED_EVENTS = {
 
 
 def test_required_domain_events_have_worker_subscribers() -> None:
-    handlers = (
-        event_registry.subscribers._handlers
-    )  # validated contract for registry wiring
+    handlers = event_registry.subscribers._handlers  # validated contract for registry wiring
     missing: list[str] = []
     for event_name in sorted(REQUIRED_EVENTS):
         event_handlers = handlers.get(event_name, [])
         if len(event_handlers) < 2:
-            missing.append(
-                f"{event_name}: expected >=2 subscribers, found {len(event_handlers)}"
-            )
+            missing.append(f"{event_name}: expected >=2 subscribers, found {len(event_handlers)}")
     assert not missing, "Missing domain event wiring: " + " | ".join(missing)
 
 
@@ -40,12 +37,8 @@ def test_routes_do_not_import_domain_layer_directly() -> None:
             continue
         content = path.read_text(encoding="utf-8")
         if "backend.app.domain" in content:
-            violations.append(
-                str(path.relative_to(Path(__file__).resolve().parents[2]))
-            )
-    assert not violations, "Routes must not import domain layer directly: " + ", ".join(
-        violations
-    )
+            violations.append(str(path.relative_to(Path(__file__).resolve().parents[2])))
+    assert not violations, "Routes must not import domain layer directly: " + ", ".join(violations)
 
 
 def test_complex_services_depend_on_domain_layer() -> None:

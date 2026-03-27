@@ -66,9 +66,7 @@ def _prune_entries(cache_key: str, now: datetime) -> list[datetime]:
     return pruned
 
 
-def _enforce_tenant_rate_limit(
-    *, tenant: str, limit: int, now: datetime
-) -> tuple[int, int]:
+def _enforce_tenant_rate_limit(*, tenant: str, limit: int, now: datetime) -> tuple[int, int]:
     cache_key = f"tenant:{tenant}"
     with _rate_limit_lock:
         attempts = _prune_entries(cache_key, now)

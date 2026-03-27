@@ -6,6 +6,7 @@ from typing import Iterable
 from sqlalchemy import Engine, text
 from sqlalchemy.engine import Connection
 
+
 MIGRATION_TABLE = "schema_migrations"
 
 

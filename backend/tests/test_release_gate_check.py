@@ -23,30 +23,20 @@ def test_validate_release_tag_rejects_invalid_patterns() -> None:
 
 
 def test_release_paths_match_expected_convention() -> None:
-    assert expected_release_notes_path("v1.2.3") == Path(
-        "docs/releases/v1.2.3-enterprise.md"
-    )
-    assert expected_signoff_path("v1.2.3") == Path(
-        "docs/releases/acceptance/v1.2.3-signoff.md"
-    )
+    assert expected_release_notes_path("v1.2.3") == Path("docs/releases/v1.2.3-enterprise.md")
+    assert expected_signoff_path("v1.2.3") == Path("docs/releases/acceptance/v1.2.3-signoff.md")
 
 
-def test_validate_release_artifacts_requires_notes_and_signoff(
-    tmp_path: Path, monkeypatch
-) -> None:
+def test_validate_release_artifacts_requires_notes_and_signoff(tmp_path: Path, monkeypatch) -> None:
     monkeypatch.chdir(tmp_path)
     (tmp_path / "docs/releases/acceptance").mkdir(parents=True, exist_ok=True)
 
     errors = validate_release_artifacts("v1.2.3")
     assert "missing release notes: docs/releases/v1.2.3-enterprise.md" in errors
-    assert (
-        "missing release sign-off: docs/releases/acceptance/v1.2.3-signoff.md" in errors
-    )
+    assert "missing release sign-off: docs/releases/acceptance/v1.2.3-signoff.md" in errors
 
 
-def test_validate_release_artifacts_passes_when_files_exist(
-    tmp_path: Path, monkeypatch
-) -> None:
+def test_validate_release_artifacts_passes_when_files_exist(tmp_path: Path, monkeypatch) -> None:
     monkeypatch.chdir(tmp_path)
     notes = tmp_path / "docs/releases/v1.2.3-enterprise.md"
     signoff = tmp_path / "docs/releases/acceptance/v1.2.3-signoff.md"

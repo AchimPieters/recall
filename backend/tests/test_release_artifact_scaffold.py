@@ -3,9 +3,7 @@ from pathlib import Path
 from tools import release_artifact_scaffold as scaffold
 
 
-def test_scaffold_release_artifacts_creates_expected_files(
-    tmp_path: Path, monkeypatch
-) -> None:
+def test_scaffold_release_artifacts_creates_expected_files(tmp_path: Path, monkeypatch) -> None:
     monkeypatch.chdir(tmp_path)
     changed = scaffold.scaffold_release_artifacts("v3.0.0", "2026-03-13")
 
@@ -17,9 +15,7 @@ def test_scaffold_release_artifacts_creates_expected_files(
     assert "## v3.0.0 - 2026-03-13" in changelog
 
 
-def test_scaffold_release_artifacts_rejects_invalid_tag(
-    tmp_path: Path, monkeypatch
-) -> None:
+def test_scaffold_release_artifacts_rejects_invalid_tag(tmp_path: Path, monkeypatch) -> None:
     monkeypatch.chdir(tmp_path)
     try:
         scaffold.scaffold_release_artifacts("3.0.0", "2026-03-13")
@@ -29,9 +25,7 @@ def test_scaffold_release_artifacts_rejects_invalid_tag(
         raise AssertionError("expected ValueError")
 
 
-def test_scaffold_release_artifacts_no_overwrite_by_default(
-    tmp_path: Path, monkeypatch
-) -> None:
+def test_scaffold_release_artifacts_no_overwrite_by_default(tmp_path: Path, monkeypatch) -> None:
     monkeypatch.chdir(tmp_path)
     notes = tmp_path / "docs/releases/v3.1.0-enterprise.md"
     notes.parent.mkdir(parents=True, exist_ok=True)

@@ -2,6 +2,7 @@ from pathlib import Path
 
 from tools import coverage_threshold_check
 
+
 SAMPLE_XML = """<?xml version=\"1.0\" ?>
 <coverage>
   <packages>

@@ -41,9 +41,7 @@ class AuthSecurityService:
     def get_active_password_reset_token(self, token_hash: str):
         return self.repo.get_active_password_reset_token(token_hash)
 
-    def mark_password_reset_token_used(
-        self, token_hash: str, used_at: datetime
-    ) -> None:
+    def mark_password_reset_token_used(self, token_hash: str, used_at: datetime) -> None:
         self.repo.mark_password_reset_token_used(token_hash, used_at)
 
     def add_security_event(

@@ -17,12 +17,8 @@ def test_dependency_policy_docs_and_security_workflow_controls_present() -> None
         "Artifact signing",
         "Review checklist",
     ]
-    missing_doc = [
-        token for token in required_doc_tokens if token not in dependency_policy
-    ]
-    assert not missing_doc, "Dependency policy doc missing tokens: " + ", ".join(
-        missing_doc
-    )
+    missing_doc = [token for token in required_doc_tokens if token not in dependency_policy]
+    assert not missing_doc, "Dependency policy doc missing tokens: " + ", ".join(missing_doc)
 
     required_workflow_tokens = [
         "bandit",
@@ -32,6 +28,6 @@ def test_dependency_policy_docs_and_security_workflow_controls_present() -> None
     missing_workflow = [
         token for token in required_workflow_tokens if token not in security_workflow
     ]
-    assert (
-        not missing_workflow
-    ), "Security workflow missing dependency controls: " + ", ".join(missing_workflow)
+    assert not missing_workflow, "Security workflow missing dependency controls: " + ", ".join(
+        missing_workflow
+    )

@@ -11,9 +11,7 @@ class PlatformService:
 
     def alert_counts(self, organization_id: int | None) -> dict[str, int]:
         if organization_id is None:
-            total_alerts = (
-                self.db.execute(text("SELECT COUNT(*) FROM alerts")).scalar() or 0
-            )
+            total_alerts = self.db.execute(text("SELECT COUNT(*) FROM alerts")).scalar() or 0
             open_alerts = (
                 self.db.execute(
                     text("SELECT COUNT(*) FROM alerts WHERE status = 'open'")
