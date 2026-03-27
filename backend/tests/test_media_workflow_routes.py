@@ -126,7 +126,9 @@ def test_editor_reviewer_publish_workflow_roles() -> None:
 def test_reviewer_to_draft_requires_reason() -> None:
     _ensure_user("media-reviewer-draft", role="reviewer", organization_id=9)
     media_id = _create_media(organization_id=9, workflow_state="review")
-    reviewer_token = create_access_token(subject="media-reviewer-draft", role="reviewer")
+    reviewer_token = create_access_token(
+        subject="media-reviewer-draft", role="reviewer"
+    )
 
     missing_reason = client.post(
         f"/api/v1/media/{media_id}/workflow/transition",
@@ -148,7 +150,9 @@ def test_reviewer_to_draft_requires_reason() -> None:
 def test_workflow_transition_writes_audit_event_payload() -> None:
     _ensure_user("media-reviewer-event", role="reviewer", organization_id=10)
     media_id = _create_media(organization_id=10, workflow_state="review")
-    reviewer_token = create_access_token(subject="media-reviewer-event", role="reviewer")
+    reviewer_token = create_access_token(
+        subject="media-reviewer-event", role="reviewer"
+    )
 
     response = client.post(
         f"/api/v1/media/{media_id}/workflow/transition",
@@ -161,7 +165,9 @@ def test_workflow_transition_writes_audit_event_payload() -> None:
     try:
         event = (
             db.query(Event)
-            .filter(Event.category == "media_workflow", Event.action == "state_transition")
+            .filter(
+                Event.category == "media_workflow", Event.action == "state_transition"
+            )
             .order_by(Event.id.desc())
             .first()
         )

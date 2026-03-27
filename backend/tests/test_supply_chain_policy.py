@@ -18,4 +18,6 @@ def test_supply_chain_workflow_enforces_sbom_scan_and_sign() -> None:
     ]
 
     missing = [token for token in required_tokens if token not in workflow]
-    assert not missing, "Missing supply-chain enforcement in workflow: " + ", ".join(missing)
+    assert not missing, "Missing supply-chain enforcement in workflow: " + ", ".join(
+        missing
+    )

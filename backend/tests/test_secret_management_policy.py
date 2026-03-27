@@ -1,5 +1,3 @@
-import os
-
 import pytest
 
 from backend.app.core.config import get_settings

@@ -1,0 +1,72 @@
+name: ESP-IDF compile compatibility
+
+on:
+  pull_request:
+  push:
+    branches:
+      - main
+      - master
+      - platform-v2
+
+jobs:
+  compile-matrix:
+    name: IDF ${{ matrix.idf_version }} • ${{ matrix.target }}
+    runs-on: ubuntu-latest
+    container:
+      image: espressif/idf:release-v${{ matrix.idf_version }}
+
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - idf_version: '6.0'
+            target: esp32
+          - idf_version: '6.0'
+            target: esp32s2
+          - idf_version: '6.0'
+            target: esp32s3
+          - idf_version: '6.0'
+            target: esp32c2
+          - idf_version: '6.0'
+            target: esp32c3
+          - idf_version: '6.0'
+            target: esp32c5
+          - idf_version: '6.0'
+            target: esp32c6
+          - idf_version: '5.3'
+            target: esp32
+          - idf_version: '5.3'
+            target: esp32s2
+          - idf_version: '5.3'
+            target: esp32s3
+          - idf_version: '5.3'
+            target: esp32c2
+          - idf_version: '5.3'
+            target: esp32c3
+          - idf_version: '5.3'
+            target: esp32c6
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Resolve examples/led basis project
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [[ -d examples/led ]]; then
+            echo "EXAMPLE_DIR=${GITHUB_WORKSPACE}/examples/led" >> "$GITHUB_ENV"
+            exit 0
+          fi
+
+          echo "::warning::examples/led not found in this repository; falling back to ESP-IDF blink example"
+          git clone --depth 1 --branch "release/v${{ matrix.idf_version }}" https://github.com/espressif/esp-idf.git /tmp/esp-idf
+          echo "EXAMPLE_DIR=/tmp/esp-idf/examples/get-started/blink" >> "$GITHUB_ENV"
+
+      - name: Build LED example for target
+        shell: bash
+        run: |
+          set -euo pipefail
+          source "$IDF_PATH/export.sh"
+          idf.py -C "$EXAMPLE_DIR" set-target "${{ matrix.target }}"
+          idf.py -C "$EXAMPLE_DIR" fullclean build

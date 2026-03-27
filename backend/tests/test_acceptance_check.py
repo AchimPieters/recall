@@ -4,7 +4,9 @@ from tools import acceptance_check
 
 
 def test_acceptance_signoff_document_has_required_sections() -> None:
-    assert acceptance_check.main([]) == 0
+    repo_root = Path(__file__).resolve().parents[2]
+    signoff_file = repo_root / "docs" / "runbooks" / "final-acceptance-signoff.md"
+    assert acceptance_check.main(["--file", str(signoff_file)]) == 0
 
 
 def test_acceptance_check_strict_passes_for_completed_signoff(tmp_path: Path) -> None:
@@ -78,12 +80,17 @@ def test_acceptance_check_strict_enforces_expected_version(tmp_path: Path) -> No
         encoding="utf-8",
     )
 
-    assert acceptance_check.main(
-        ["--strict", "--file", str(signoff), "--expected-version", "v1.2.4"]
-    ) == 1
+    assert (
+        acceptance_check.main(
+            ["--strict", "--file", str(signoff), "--expected-version", "v1.2.4"]
+        )
+        == 1
+    )
 
 
-def test_acceptance_check_strict_rejects_placeholder_approvals_and_bad_date(tmp_path: Path) -> None:
+def test_acceptance_check_strict_rejects_placeholder_approvals_and_bad_date(
+    tmp_path: Path,
+) -> None:
     signoff = tmp_path / "identity-signoff.md"
     signoff.write_text(
         """# Signoff
