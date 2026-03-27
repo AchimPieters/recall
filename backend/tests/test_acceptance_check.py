@@ -4,7 +4,9 @@ from tools import acceptance_check
 
 
 def test_acceptance_signoff_document_has_required_sections() -> None:
-    assert acceptance_check.main([]) == 0
+    repo_root = Path(__file__).resolve().parents[2]
+    signoff_file = repo_root / "docs" / "runbooks" / "final-acceptance-signoff.md"
+    assert acceptance_check.main(["--file", str(signoff_file)]) == 0
 
 
 def test_acceptance_check_strict_passes_for_completed_signoff(tmp_path: Path) -> None:

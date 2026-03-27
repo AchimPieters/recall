@@ -17,14 +17,14 @@ def test_init_tracing_returns_false_when_modules_missing(monkeypatch) -> None:
     )
     tracing_module.init_tracing.cache_clear()
 
-    original_find_spec = tracing_module.importlib.util.find_spec
+    original_find_spec = tracing_module.find_spec
 
     def fake_find_spec(name: str):
         if name.startswith("opentelemetry"):
             return None
         return original_find_spec(name)
 
-    monkeypatch.setattr(tracing_module.importlib.util, "find_spec", fake_find_spec)
+    monkeypatch.setattr(tracing_module, "find_spec", fake_find_spec)
     assert tracing_module.init_tracing("recall-api") is False
 
 
@@ -39,7 +39,7 @@ def test_init_tracing_returns_true_when_endpoint_and_modules_available(
     tracing_module.init_tracing.cache_clear()
 
     monkeypatch.setattr(
-        tracing_module.importlib.util,
+        tracing_module,
         "find_spec",
         lambda name: object() if name.startswith("opentelemetry") else None,
     )
