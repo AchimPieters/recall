@@ -24,12 +24,16 @@ def discover_migration_files(migrations_path: Path | None = None) -> list[Path]:
 
 
 def _ensure_migration_table(conn) -> None:
-    conn.execute(text(f"""
+    conn.execute(
+        text(
+            f"""
             CREATE TABLE IF NOT EXISTS {MIGRATION_TABLE} (
                 version TEXT PRIMARY KEY,
                 applied_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
             )
-            """))
+            """
+        )
+    )
 
 
 def _applied_versions(conn) -> set[str]:
